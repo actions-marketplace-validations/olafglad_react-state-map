@@ -1,7 +1,7 @@
 {
   "name": "@react-state-map/core",
-  "version": "0.2.0",
-  "description": "Static analysis engine for React state flow visualization — parses components, detects prop drilling, context boundaries, and state patterns (useState, Redux, Zustand)",
+  "version": "0.3.0",
+  "description": "Static analysis engine for React: knows where every prop comes from. Import-aware component graph, prop tracing, impact analysis, prop-drilling and Next.js Server Component diagnostics, and safe lift-to-context refactors.",
   "license": "MIT",
   "author": "Olaf Glad",
   "repository": {
@@ -15,13 +15,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./query": {
+      "types": "./dist/graph/query.d.ts",
+      "default": "./dist/graph/query.js"
+    },
+    "./package.json": "./package.json",
+    "./format": {
+      "types": "./dist/format/llm.d.ts",
+      "default": "./dist/format/llm.js"
     }
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "test": "node --test --experimental-strip-types src/**/*.test.ts"
+    "test": "tsc && node --test test/*.test.mjs"
   },
   "dependencies": {
     "ts-morph": "^24.0.0"
@@ -32,21 +41,36 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "keywords": [
     "react",
-    "state",
     "static-analysis",
-    "typescript",
-    "ast",
-    "graph",
     "prop-drilling",
     "context",
     "state-management",
-    "redux",
+    "impact-analysis",
+    "codemod",
+    "refactor",
+    "nextjs",
+    "server-components",
+    "react-19",
+    "typescript",
+    "ast",
     "zustand",
-    "component-analysis"
-  ]
+    "redux",
+    "tanstack-query",
+    "jotai",
+    "mcp"
+  ],
+  "homepage": "https://github.com/olafglad/react-state-map/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/olafglad/react-state-map/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

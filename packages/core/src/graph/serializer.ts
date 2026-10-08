@@ -22,6 +22,9 @@ export function serializeGraph(graph: StateFlowGraph): SerializedStateFlowGraph 
     bundles: graph.bundles,
     contextLeaks: graph.contextLeaks,
     propChains: graph.propChains,
+    renders: graph.renders,
+    insights: graph.insights,
+    meta: graph.meta,
   };
 }
 
@@ -39,6 +42,9 @@ export function deserializeGraph(serialized: SerializedStateFlowGraph): StateFlo
     bundles: serialized.bundles,
     contextLeaks: serialized.contextLeaks || [],
     propChains: serialized.propChains || [],
+    renders: serialized.renders || [],
+    insights: serialized.insights || [],
+    meta: serialized.meta,
   };
 }
 

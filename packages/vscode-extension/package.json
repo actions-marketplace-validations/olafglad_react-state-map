@@ -1,8 +1,8 @@
 {
   "name": "react-state-map-vscode",
   "displayName": "React State Map",
-  "description": "Visualize React state flow with interactive graph — ELK.js layout, canvas rendering, semantic zoom, fuzzy search, path-finding, edge layer controls, and prop drilling detection. Supports useState, useContext, Redux, Zustand, and custom hooks.",
-  "version": "0.2.1",
+  "description": "See where every prop really comes from — right in your editor. Prop origins on hover, impact analysis, prop-drilling quick fixes that lift state into context, Next.js server/client checks, an interactive state graph, and tools for Copilot & AI agents.",
+  "version": "0.3.0",
   "publisher": "OlafGlad",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -19,47 +19,109 @@
     "url": "https://github.com/olafglad/react-state-map/issues"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "Visualization",
-    "Debuggers",
+    "Linters",
+    "Programming Languages",
+    "AI",
     "Other"
   ],
   "keywords": [
     "react",
     "state",
-    "visualization",
-    "static-analysis",
-    "state-management",
-    "redux",
-    "zustand",
-    "context",
-    "props",
-    "component",
-    "diagram",
-    "flow",
-    "graph",
-    "elkjs",
-    "cytoscape",
     "prop-drilling",
-    "search",
-    "path-finding"
+    "context",
+    "refactor",
+    "codelens",
+    "static-analysis",
+    "nextjs",
+    "server-components",
+    "react-19",
+    "zustand",
+    "redux",
+    "tanstack-query",
+    "jotai",
+    "visualization",
+    "graph",
+    "impact-analysis",
+    "copilot",
+    "mcp",
+    "ai"
   ],
   "activationEvents": [
     "workspaceContains:**/*.tsx",
-    "workspaceContains:**/*.jsx"
+    "workspaceContains:**/*.jsx",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "reactStateMap.openPanel",
-        "title": "React State Map: Open Panel"
+        "title": "Open State Map",
+        "category": "React State Map",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "reactStateMap.showInStateMap",
+        "title": "Show in State Map",
+        "category": "React State Map",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "reactStateMap.showImpact",
+        "title": "Show Impact",
+        "category": "React State Map",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "reactStateMap.liftToContext",
+        "title": "Lift Drilled State into Context…",
+        "category": "React State Map",
+        "icon": "$(lightbulb-autofix)"
+      },
+      {
+        "command": "reactStateMap.goToComponent",
+        "title": "Go to Component…",
+        "category": "React State Map",
+        "icon": "$(search)"
+      },
+      {
+        "command": "reactStateMap.peekRelations",
+        "title": "Show Parents & Children",
+        "category": "React State Map",
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "reactStateMap.refresh",
-        "title": "React State Map: Refresh"
+        "title": "Re-analyze Workspace",
+        "category": "React State Map",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "reactStateMap.highlightImpact",
+        "title": "Highlight Impact in Graph",
+        "category": "React State Map",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "reactStateMap.clearImpact",
+        "title": "Clear Impact",
+        "category": "React State Map",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "reactStateMap.openLocation",
+        "title": "Open Location",
+        "category": "React State Map"
+      },
+      {
+        "command": "reactStateMap.removeUnusedProp",
+        "title": "Remove Unused Prop",
+        "category": "React State Map"
       }
     ],
     "configuration": {
@@ -68,15 +130,25 @@
         "reactStateMap.drillingThreshold": {
           "type": "number",
           "default": 3,
-          "description": "Minimum number of component hops to consider as prop drilling"
+          "description": "Minimum number of component hops before passing a value down counts as prop drilling (3 = owner → 2 forwarding components → consumer).",
+          "minimum": 2
         },
         "reactStateMap.exclude": {
           "type": "array",
           "default": [
             "**/node_modules/**",
             "**/dist/**",
+            "**/build/**",
+            "**/out/**",
+            "**/.next/**",
+            "**/.turbo/**",
+            "**/coverage/**",
+            "**/storybook-static/**",
+            "**/*.d.ts",
             "**/*.test.*",
-            "**/*.spec.*"
+            "**/*.spec.*",
+            "**/*.stories.*",
+            "**/*.min.js"
           ],
           "description": "Glob patterns to exclude from analysis"
         },
@@ -84,28 +156,412 @@
           "type": "array",
           "default": [
             "**/*.tsx",
-            "**/*.jsx"
+            "**/*.jsx",
+            "**/*.ts",
+            "**/*.js",
+            "**/*.mts",
+            "**/*.mjs"
           ],
-          "description": "Glob patterns to include in analysis"
+          "description": "Glob patterns (relative to the workspace folder) to analyze. Plain .ts/.js files are included so hooks, contexts and stores defined outside components are understood."
         },
-        "reactStateMap.autoRefresh": {
+        "reactStateMap.analyzeOnType": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically refresh visualization on file save"
+          "description": "Re-analyze unsaved changes as you type (debounced). When off, analysis updates on save."
+        },
+        "reactStateMap.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show CodeLens above components and state declarations (who renders it, what shares its state, drilling)."
+        },
+        "reactStateMap.hover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show where a prop comes from (and who depends on a piece of state) on hover."
+        },
+        "reactStateMap.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report prop drilling, context leaks, unused props and Server Component mistakes in the Problems panel."
+        },
+        "reactStateMap.diagnostics.disabledCodes": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "enum": [
+              "PROP_DRILLING",
+              "PROP_PASSTHROUGH",
+              "CONTEXT_LEAK",
+              "PROP_BUNDLE",
+              "UNUSED_PROP",
+              "SERVER_COMPONENT_HOOK",
+              "SERVER_TO_CLIENT_FUNCTION_PROP"
+            ]
+          },
+          "description": "Issue codes to hide from the Problems panel."
+        },
+        "reactStateMap.fixes.providerSyntax": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "react19",
+            "legacy"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Detect from the installed React version",
+            "<MyContext value={…}> (React 19+)",
+            "<MyContext.Provider value={…}>"
+          ],
+          "description": "Provider syntax used by the \"Lift into context\" fix."
+        },
+        "reactStateMap.editorTitleButton": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a State Map button in the editor title bar for React files."
+        },
+        "reactStateMap.fixes.preview": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open multi-file fixes such as \"Lift into context\" in the Refactor Preview, where you tick the changes to apply, instead of applying them directly (they are always undoable)."
         }
       }
-    }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "reactStateMap.openLocation",
+          "when": "false"
+        },
+        {
+          "command": "reactStateMap.removeUnusedProp",
+          "when": "false"
+        },
+        {
+          "command": "reactStateMap.peekRelations",
+          "when": "editorLangId =~ /(typescript|javascript)react/"
+        },
+        {
+          "command": "reactStateMap.highlightImpact",
+          "when": "reactStateMap.hasImpact"
+        },
+        {
+          "command": "reactStateMap.clearImpact",
+          "when": "reactStateMap.hasImpact"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "reactStateMap.showImpact",
+          "when": "editorLangId =~ /(typescript|javascript)react/",
+          "group": "navigation@90"
+        },
+        {
+          "command": "reactStateMap.showInStateMap",
+          "when": "editorLangId =~ /(typescript|javascript)react/",
+          "group": "navigation@91"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "reactStateMap.openPanel",
+          "when": "editorLangId =~ /(typescript|javascript)react/ && config.reactStateMap.editorTitleButton",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "reactStateMap.openPanel",
+          "when": "view == reactStateMap.inspector",
+          "group": "navigation"
+        },
+        {
+          "command": "reactStateMap.refresh",
+          "when": "view == reactStateMap.inspector",
+          "group": "navigation"
+        },
+        {
+          "command": "reactStateMap.highlightImpact",
+          "when": "view == reactStateMap.impact && reactStateMap.hasImpact",
+          "group": "navigation"
+        },
+        {
+          "command": "reactStateMap.clearImpact",
+          "when": "view == reactStateMap.impact && reactStateMap.hasImpact",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "reactStateMap",
+          "title": "React State Map",
+          "icon": "images/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "reactStateMap": [
+        {
+          "id": "reactStateMap.inspector",
+          "name": "Component Inspector",
+          "icon": "images/activity.svg"
+        },
+        {
+          "id": "reactStateMap.impact",
+          "name": "Impact",
+          "icon": "images/activity.svg"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "reactStateMap.showImpact",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "editorTextFocus && editorLangId =~ /(typescript|javascript)react/"
+      },
+      {
+        "command": "reactStateMap.showInStateMap",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "editorTextFocus && editorLangId =~ /(typescript|javascript)react/"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "reactStateMap_overview",
+        "toolReferenceName": "stateMapOverview",
+        "displayName": "React State Map: Overview",
+        "modelDescription": "Summarize the analyzed React project: component/state counts, detected frameworks (Next.js App Router, React version), the most important issues by severity, the longest prop-drilling chains (with drilling_path_id for plan_fix) and every context with its provider and consumer count. Call this first to orient yourself in an unfamiliar React codebase.",
+        "userDescription": "Summarize the analyzed React project: component/state counts, detected frameworks (Next.js App Router, React version), the most important issues by severity, the longest prop-drilling chains (with drilling_path_id for plan_fix) and every context with its provider and consumer count.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "reactStateMap_findComponents",
+        "toolReferenceName": "stateMapFind",
+        "displayName": "React State Map: Find Components",
+        "modelDescription": "Search React components by name (exact, case-insensitive, or substring) or by part of the file path. Returns each match with file:line, component kind (function/arrow/class/memo/forwardRef), Server/Client environment when known, and its id. Use it to locate a component or disambiguate names before calling get_component, trace_prop or get_impact.",
+        "userDescription": "Search React components by name (exact, case-insensitive, or substring) or by part of the file path.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Component name or part of a file path"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum results (default 20)"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      {
+        "name": "reactStateMap_component",
+        "toolReferenceName": "stateMapComponent",
+        "displayName": "React State Map: Component Details",
+        "modelDescription": "Everything known about one component: its props (type, whether used, and which ancestor state each prop originates from and over how many hops), state it declares (type, library, store), state received from ancestors, contexts consumed and provided, which components render it (with the props passed at each call site) and which it renders, its role in prop-drilling chains, and its issues. Use before modifying a component's props, state or children.",
+        "userDescription": "Everything known about one component: its props (type, whether used, and which ancestor state each prop originates from and over how many hops), state it declares (type, library, store), state received from ancestors, contexts consumed and provided, which components render it (with the props passed at each call site) and which it renders, its role in prop-drilling chains, and its issues.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "component": {
+              "type": "string",
+              "description": "Component name, id, or \"path/File.tsx#Name\""
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      },
+      {
+        "name": "reactStateMap_traceProp",
+        "toolReferenceName": "stateMapTraceProp",
+        "displayName": "React State Map: Trace Prop",
+        "modelDescription": "Trace where a component's prop value comes from: walks up through every component that forwards it (handling renames and {...spread}) back to the state declaration that owns it (useState/useReducer/store/etc.), with file:line of each hand-off, and lists every call site that renders the component with the value passed there. Use it to answer \"where does this prop come from / who sets it\" before changing a prop.",
+        "userDescription": "Trace where a component's prop value comes from: walks up through every component that forwards it (handling renames and {...spread}) back to the state declaration that owns it (useState/useReducer/store/etc.), with file:line of each hand-off, and lists every call site that renders the component with the value passed there.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "component": {
+              "type": "string",
+              "description": "Component that receives the prop"
+            },
+            "prop": {
+              "type": "string",
+              "description": "Prop name"
+            }
+          },
+          "required": [
+            "component",
+            "prop"
+          ]
+        }
+      },
+      {
+        "name": "reactStateMap_impact",
+        "toolReferenceName": "stateMapImpact",
+        "displayName": "React State Map: Impact Analysis",
+        "modelDescription": "List which components are affected if you change something. Pass exactly one target: {component} — callers that must update props, components receiving data from it, consumers of contexts it provides, and its render subtree; {state} (state name or id, optionally with {component} = the owning component to disambiguate) — components receiving the value via props, components subscribed to the same store/atom/query/context, and components that re-render with the owner; {context} (context name or id) — every consumer and provider. Use before renaming/removing props, changing state shape, or changing a context value.",
+        "userDescription": "List which components are affected if you change something.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "component": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "description": "State name or id"
+            },
+            "context": {
+              "type": "string",
+              "description": "Context name or id"
+            }
+          }
+        }
+      },
+      {
+        "name": "reactStateMap_renderPath",
+        "toolReferenceName": "stateMapRenderPath",
+        "displayName": "React State Map: Render Path",
+        "modelDescription": "Find the shortest chain of components through which one component renders another (parent → … → descendant), with the file:line of each JSX call site and the props passed there. Checks the reverse direction too. Use it to understand how a component is reached in the tree or where to put a provider so a descendant can read it.",
+        "userDescription": "Find the shortest chain of components through which one component renders another (parent → … → descendant), with the file:line of each JSX call site and the props passed there.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ]
+        }
+      },
+      {
+        "name": "reactStateMap_issues",
+        "toolReferenceName": "stateMapIssues",
+        "displayName": "React State Map: List Issues",
+        "modelDescription": "List state-management issues found by the analysis, sorted by severity, with file:line, message, stable id and whether an automatic fix exists. Codes: PROP_DRILLING (state passed through components that only forward it), PROP_PASSTHROUGH (one forwarding component in such a chain), CONTEXT_LEAK (context value re-passed as props), PROP_BUNDLE (large object prop), UNUSED_PROP, SERVER_COMPONENT_HOOK (hook used in a Server Component), SERVER_TO_CLIENT_FUNCTION_PROP (function passed from a Server to a Client Component). Filter by code, minimum severity or file.",
+        "userDescription": "List state-management issues found by the analysis, sorted by severity, with file:line, message, stable id and whether an automatic fix exists.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info",
+                "hint"
+              ]
+            },
+            "file": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      {
+        "name": "reactStateMap_planFix",
+        "toolReferenceName": "stateMapPlanFix",
+        "displayName": "React State Map: Plan Fix",
+        "modelDescription": "Compute an automatic refactor and return it as unified diffs WITHOUT writing any files. Supports: lifting drilled state into a new React context (pass drilling_path_id, or the id of a PROP_DRILLING / PROP_PASSTHROUGH issue as insight_id) — creates the context + hook file, wraps the owner's JSX in the provider, removes the forwarded props from intermediate components and reads the value with the hook in the consumer; and removing an unused prop (insight_id of an UNUSED_PROP issue). The result says whether the fix is applicable and lists caveats. Apply the diff yourself by editing the files, then verify with the issues tool.",
+        "userDescription": "Compute an automatic refactor and return it as unified diffs WITHOUT writing any files.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "tags": [
+          "react",
+          "state"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "drilling_path_id": {
+              "type": "string"
+            },
+            "insight_id": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ]
   },
   "scripts": {
     "prebuild:dagre": "esbuild node_modules/dagre/dist/dagre.js --bundle --format=iife --global-name=dagre --minify --outfile=src/panels/dagre.bundle.js",
     "prebuild:elk": "esbuild node_modules/elkjs/lib/elk.bundled.js --bundle --format=iife --global-name=ELK --minify --outfile=src/panels/elk.bundle.js",
     "prebuild:cytoscape": "esbuild node_modules/cytoscape/dist/cytoscape.umd.js --bundle --format=iife --global-name=cytoscape --minify --outfile=src/panels/cytoscape.bundle.js",
     "prebuild": "npm run prebuild:dagre && npm run prebuild:elk && npm run prebuild:cytoscape",
-    "build": "npm run prebuild && esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --tree-shaking=true --loader:.bundle.js=text",
-    "build:dev": "npm run prebuild && esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --loader:.bundle.js=text",
+    "build": "npm run prebuild && esbuild src/extension.ts src/analysis/worker.ts --bundle --outdir=dist --entry-names=[name] --external:vscode --format=cjs --platform=node --target=node18 --minify --tree-shaking=true --loader:.bundle.js=text",
+    "build:dev": "npm run prebuild && esbuild src/extension.ts src/analysis/worker.ts --bundle --outdir=dist --entry-names=[name] --external:vscode --format=cjs --platform=node --target=node18 --sourcemap --loader:.bundle.js=text",
     "watch": "npm run build:dev -- --watch",
-    "package": "vsce package",
-    "clean": "rm -rf dist"
+    "package": "npm run build && vsce package --no-dependencies",
+    "clean": "rm -rf dist",
+    "test": "npm run build:dev && node test/runTest.mjs"
   },
   "dependencies": {
     "@react-state-map/core": "workspace:*",
@@ -117,6 +573,8 @@
     "@types/dagre": "^0.7.52",
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.19.0",
     "typescript": "^5.3.0"
   }

@@ -1,7 +1,7 @@
 {
   "name": "@react-state-map/cli",
-  "version": "0.2.0",
-  "description": "Visualize React state flow with interactive graph — ELK.js layout, canvas rendering, semantic zoom, fuzzy search, path-finding, and prop drilling detection",
+  "version": "0.3.0",
+  "description": "Know where every prop comes from — MCP server for Claude Code, Cursor & Copilot, a CI check with GitHub annotations, one-command prop-drilling fixes, and an interactive React state graph.",
   "type": "module",
   "license": "MIT",
   "author": "Olaf Glad",
@@ -9,11 +9,14 @@
     "type": "git",
     "url": "https://github.com/olafglad/react-state-map"
   },
-  "homepage": "https://github.com/olafglad/react-state-map#readme",
+  "homepage": "https://github.com/olafglad/react-state-map/tree/main/packages/cli#readme",
   "bin": {
     "react-state-map": "./dist/index.js"
   },
   "main": "./dist/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc && cp src/renderers/dagre.bundle.js src/renderers/elk.bundle.js src/renderers/cytoscape.bundle.js dist/renderers/",
     "dev": "tsc --watch",
@@ -21,10 +24,12 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@react-state-map/core": "workspace:*",
     "chokidar": "^3.5.3",
     "commander": "^12.0.0",
-    "cytoscape": "^3.30.0"
+    "cytoscape": "^3.30.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -32,8 +37,10 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "keywords": [
     "react",
@@ -50,6 +57,17 @@
     "context",
     "redux",
     "zustand",
-    "component-diagram"
-  ]
+    "component-diagram",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "ci",
+    "github-action",
+    "sarif",
+    "nextjs",
+    "react-server-components"
+  ],
+  "bugs": {
+    "url": "https://github.com/olafglad/react-state-map/issues"
+  }
 }

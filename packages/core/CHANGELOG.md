@@ -2,6 +2,28 @@
 
 All notable changes to @react-state-map/core will be documented in this file.
 
+## [0.3.0] - 2026-10-08
+
+A rewrite of the analyzer around per-file facts and an import-aware linker, plus a query API, diagnostics and code-fix planners.
+
+### Added
+- **Import-aware linking**: JSX tags, hooks, contexts and types are resolved like TypeScript does — `paths`/`baseUrl`/`extends` from the nearest tsconfig/jsconfig, solution-style `references` (Vite), barrels (`export *`, `export { default as X }`), aliased, default and namespace imports. Same-named components in different files are told apart.
+- **Incremental parsing**: `ReactParser.updateFiles([{ filePath, content? }])` + `parse()` re-extracts only changed files and re-links the graph.
+- **Render graph** (`graph.renders`) with JSX call sites and props, including implicit Next.js layout → page edges.
+- **Insights** (`graph.insights`): `PROP_DRILLING`, `PROP_PASSTHROUGH`, `CONTEXT_LEAK`, `PROP_BUNDLE`, `UNUSED_PROP`, `SERVER_COMPONENT_HOOK`, `SERVER_TO_CLIENT_FUNCTION_PROP` — with locations, related locations and stable fingerprint ids.
+- **`GraphQuery`** (also as `@react-state-map/core/query`): component lookup, render paths, `traceProp`, `impactOfState` / `impactOfComponent` / `impactOfContext`, shared-store subscribers, summaries.
+- **Fix planners**: `planLiftToContext` (lift drilled state into a typed context + hook across every file, with safety checks) and `planRemoveUnusedProp`.
+- **Formatters** (`@react-state-map/core/format`): LLM-friendly text for overview, components, prop traces, impact, issues and fix plans; `createUnifiedDiff` and `diffLineEdits`.
+- New component shapes: `memo`, `forwardRef`, class components, anonymous default exports; props from imported interfaces/type aliases, `props.x` access, `{...rest}` forwarding; setter tracking (`[x, setX]` drilled together).
+- New state sources: React 19 `use()`, `useActionState`, `useOptimistic`, `useSyncExternalStore`, `useFormStatus`; TanStack Query, SWR, Apollo, urql, Jotai, Recoil, Valtio, XState, React Hook Form, RTK Query, typed Redux hooks, router hooks. Custom hooks that wrap contexts are linked to their providers; React 19 `<Ctx value>` providers.
+- Next.js App Router environment detection (`component.environment`: `server` / `client`).
+- Stable, readable ids (`c:src/App.tsx#App`, `s:src/App.tsx#App.count`, `ctx:src/App.tsx#ThemeContext`) and `graph.meta` (frameworks, timing).
+
+### Changed
+- Default include now covers `.ts`/`.js`/`.mts`/`.mjs`; default exclude skips build output, `.next`, coverage, stories and `.d.ts`.
+- Prop drilling follows each value thread separately (no more mixed-prop paths) and reports value + setter on the same route as one issue.
+- `parseFile` is removed (the parser now works on cached per-file facts).
+
 ## [0.2.0] - 2026-03-17
 
 ### Fixed

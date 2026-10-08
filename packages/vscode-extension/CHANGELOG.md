@@ -2,6 +2,33 @@
 
 All notable changes to React State Map will be documented in this file.
 
+## [0.3.0] - 2026-10-08
+
+React State Map moves from "a graph you open sometimes" to answers right where you work.
+
+### Added
+- **Prop origins on hover**: hover a prop to see the state that owns it and every component it passes through — across renames, `{...props}` spreads, barrel files and path aliases — with clickable hops and call-site values. Hover a piece of state to see who depends on it.
+- **CodeLens** above components (rendered by, renders, shares state with, drills / only forwards) and above state declarations (how many other components use it).
+- **Diagnostics in the Problems panel**: prop drilling (on the exact JSX attribute, with the whole chain as related locations), forwarding-only steps, context leaks, large prop bundles, unused props (faded out), and Next.js errors — hooks in Server Components and functions passed from Server to Client Components.
+- **Quick fix: Lift drilled state into a context.** Creates a typed context + hook, provides it at the source (memoized; React 19 `<Ctx value>` when detected), removes the prop from every intermediate component's signature, types and JSX, and reads it with the hook in the consumer — one undoable multi-file edit, offered only when it's safe. Optional Refactor Preview (`reactStateMap.fixes.preview`).
+- **Quick fix: Remove unused prop.**
+- **Impact analysis** (`Show Impact`, `⌘⌥I` / `Ctrl+Alt+I`) for state, components and contexts, in a new Impact view that stays in sync as you edit and can be highlighted in the graph.
+- **Component Inspector** sidebar that follows the cursor: props with their origins, state, contexts, parents, children and issues.
+- **Copilot agent-mode tools** (`#stateMapTraceProp`, `#stateMapImpact`, `#stateMapPlanFix`, …) backed by the live analysis.
+- **Live analysis of unsaved changes**, in a background worker thread so the editor never blocks; incremental re-analysis per file.
+- Commands: Show in State Map (`⌘⌥M` / `Ctrl+Alt+M`), Go to Component…, Show Parents & Children, Re-analyze Workspace; status bar item with component and issue counts; activity bar container; multi-root workspace support.
+- Graph: updates in place without losing zoom/selection, focus-on-component and impact highlighting, client/server badges, per-component insights, "Rendered by"/"Renders" with call sites, colors for all new state types.
+
+### Analysis engine
+- Components are resolved through imports like TypeScript does: tsconfig/jsconfig `paths`, `extends`, Vite-style project references, barrels (`export *`, `export { default as X }`), aliased, default and namespace imports. Two components with the same name no longer collide.
+- New component shapes: `memo`, `forwardRef`, class components, anonymous default exports; props from imported interfaces/type aliases (with `extends`), `props.x` access and `{...rest}` forwarding.
+- React 19 (`use()`, `<Ctx value>`, `useActionState`, `useOptimistic`, `useFormStatus`), Next.js App Router Server/Client Components, TanStack Query, SWR, Apollo, Jotai, Recoil, Valtio, XState, React Hook Form, RTK Query and typed Redux hooks, router hooks. Custom hooks that wrap `useContext` are linked to their providers.
+- `.ts`/`.js` files are analyzed by default so hooks, contexts and stores outside components are understood; build output, tests and stories are excluded.
+
+### Changed
+- Requires VS Code 1.95 or newer.
+- `reactStateMap.autoRefresh` is replaced by `reactStateMap.analyzeOnType`.
+
 ## [0.2.0] - 2026-03-17
 
 ### Added

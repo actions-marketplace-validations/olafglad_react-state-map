@@ -34,8 +34,22 @@ function getCytoscapeBundle(): string {
   return '/* cytoscape bundle not found */';
 }
 
+/**
+ * Serialize a value for embedding inside an inline <script>. Escapes characters that could
+ * close the script element (`</script>`), start an HTML comment, or break JS string literals
+ * (U+2028 / U+2029), so component names and prop values can never inject markup.
+ */
+export function toScriptJSON(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 export function generateHTML(graph: SerializedStateFlowGraph): string {
-  const graphJSON = JSON.stringify(graph);
+  const graphJSON = toScriptJSON(graph);
   const elkBundle = getElkBundle();
   const cytoscapeBundle = getCytoscapeBundle();
 
@@ -69,7 +83,7 @@ export function generateHTML(graph: SerializedStateFlowGraph): string {
   const propChainCount = graph.propChains?.length || 0;
   const complexChains = graph.propChains?.filter(c => c.depth >= 2).length || 0;
 
-  const summaryJSON = JSON.stringify({
+  const summaryJSON = toScriptJSON({
     components: { totalComponents: components.length },
     state: { totalStateNodes: stateCount },
     flow: { totalEdges: edgeCount },
@@ -766,6 +780,8 @@ function getStyles(): string {
 
     .legend {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 6px;
       gap: 20px;
       padding: 10px 20px;
       background: #161b22;
@@ -783,6 +799,24 @@ function getStyles(): string {
       width: 12px;
       height: 12px;
       border-radius: 3px;
+    }
+
+    .legend-color.legend-dot {
+      border-radius: 50%;
+    }
+
+    .legend-separator {
+      width: 1px;
+      align-self: stretch;
+      background: #30363d;
+    }
+
+    .legend-heading {
+      color: #8b949e;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      align-self: center;
     }
 
     .warning-badge {
@@ -1008,6 +1042,81 @@ function getScript(): string {
     { name: 'red', fill: '#f85149', light: '#ff7b72' },
   ];
   let contextColorMap = new Map();
+
+  // State type palette (sidebar tags + legend) - keep in sync with the VS Code webview
+  const STATE_TYPE_COLORS = {
+    useState: '#1f6feb',
+    useReducer: '#388bfd',
+    useContext: '#8957e5',
+    zustand: '#bf8700',
+    redux: '#764abc',
+    customHook: '#2ea043',
+    props: '#6e7681',
+    serverState: '#f0883e',
+    atom: '#db61a2',
+    machine: '#da3633',
+    form: '#0ea5e9',
+    router: '#6366f1',
+    useActionState: '#65a30d',
+    useOptimistic: '#c026d3',
+    externalStore: '#57534e'
+  };
+  const STATE_TYPE_LABELS = {
+    useState: 'useState',
+    useReducer: 'useReducer',
+    useContext: 'useContext',
+    zustand: 'Zustand',
+    redux: 'Redux',
+    customHook: 'Custom Hook',
+    props: 'Props',
+    serverState: 'Server State',
+    atom: 'Atom',
+    machine: 'State Machine',
+    form: 'Form',
+    router: 'Router',
+    useActionState: 'useActionState',
+    useOptimistic: 'useOptimistic',
+    externalStore: 'External Store'
+  };
+
+  function escapeLegendText(value) {
+    return String(value === null || value === undefined ? '' : value).replace(/[&<>"']/g, ch => {
+      switch (ch) {
+        case '&': return '&amp;';
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '"': return '&quot;';
+        default: return '&#39;';
+      }
+    });
+  }
+
+  function getStateTypeColor(type) {
+    return STATE_TYPE_COLORS[type] || '#8b949e';
+  }
+
+  function getStateTypeLabel(type) {
+    return STATE_TYPE_LABELS[type] || String(type || 'unknown');
+  }
+
+  // Legend entries for the state types present in the graph
+  function getStateTypeLegendHtml() {
+    const present = new Set();
+    Object.values(graphData.components || {}).forEach(comp => {
+      (comp.stateProvided || []).forEach(s => { if (s && s.type) present.add(s.type); });
+    });
+    Object.values(graphData.stateNodes || {}).forEach(s => { if (s && s.type) present.add(s.type); });
+    present.delete('props');
+    const types = Object.keys(STATE_TYPE_COLORS).filter(t => present.has(t))
+      .concat(Array.from(present).filter(t => !(t in STATE_TYPE_COLORS)).sort());
+    if (types.length === 0) return '';
+    return '<div class="legend-separator"></div><span class="legend-heading">State</span>' + types.map(type => \`
+        <div class="legend-item" title="\${escapeLegendText(type)}">
+          <div class="legend-color legend-dot" style="background: \${getStateTypeColor(type)}"></div>
+          <span>\${escapeLegendText(getStateTypeLabel(type))}</span>
+        </div>
+      \`).join('');
+  }
 
   // Assign colors to contexts
   function assignContextColors() {
@@ -2593,8 +2702,8 @@ function getScript(): string {
         <div class="sidebar-section">
           <h3>State Defined</h3>
           \${comp.stateProvided.map(s => \`
-            <span class="tag tag-state">\${s.name}</span>
-            <span style="font-size:10px;color:#8b949e">(\${s.type})</span>
+            <span class="tag tag-state" style="background: \${getStateTypeColor(s.type)};">\${s.name}</span>
+            <span style="font-size:10px;color:#8b949e">(\${escapeLegendText(getStateTypeLabel(s.type) + (s.library ? ' · ' + s.library : ''))})</span>
           \`).join('')}
         </div>
       \`;
@@ -2796,6 +2905,7 @@ function getScript(): string {
           <div class="legend-color" style="background: transparent; border: 2px dashed #8957e5;"></div>
           <span>Context</span>
         </div>
+        \${getStateTypeLegendHtml()}
       \`;
     }
   }

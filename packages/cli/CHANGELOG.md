@@ -2,6 +2,28 @@
 
 All notable changes to @react-state-map/cli will be documented in this file.
 
+## [0.3.0] - 2026-10-08
+
+### Added
+- **`react-state-map check [dir]`**: CI command with `text`, `json`, `github`, `sarif` and `markdown` output.
+  - `--fail-on error|warning|info|none` sets the exit code (1 = issues found, 2 = usage or analysis error).
+  - `--base <git-ref>` reports only issues that are new compared to a git ref (analyzed in a temporary `git worktree`), plus a count of issues fixed since the base. A missing ref is fetched from `origin` (shallow) first.
+  - `--baseline <file>` / `--write-baseline <file>` to accept existing issues.
+  - `github` format emits workflow-command annotations and appends a job summary to `$GITHUB_STEP_SUMMARY`; it is the default when `GITHUB_ACTIONS=true`.
+  - SARIF 2.1.0 output with one rule per issue code and stable fingerprints, for GitHub code scanning.
+  - `--min-severity` (default `info`), `--max-issues`, `--output`.
+- **`react-state-map fix [dir] [id]`**: lists fixable prop-drilling routes and unused props (`--list`), prints a unified diff for a fix, or applies it with `--write`. Generates React 19 `<Context value>` providers when React 19 is detected (`--react19` / `--no-react19` to override). Files changed since analysis are never overwritten.
+- **`react-state-map mcp [dir]`**: Model Context Protocol server over stdio for AI coding agents (Claude Code, Cursor, VS Code / Copilot, …). Keeps the analysis warm and updates it incrementally on file changes. Tools: `get_overview`, `find_components`, `get_component`, `trace_prop`, `get_impact`, `find_render_path`, `list_issues`, `plan_fix` (returns diffs, never writes files). Resources: `react-state-map://overview`, `react-state-map://issues`.
+- **GitHub Action** (`olafglad/react-state-map@…`, `action.yml` at the repository root): runs `check --format github` against the pull request base.
+
+### Changed
+- Watch mode (`--watch`) keeps one parser alive and re-analyzes only changed files instead of re-parsing the whole project.
+- Requires `@react-state-map/core` with the incremental parser, render graph, insights and fix planners.
+- When `--include` / `--exclude` are not given, the core defaults are used (`.ts`/`.js` files are analyzed as well, tests, stories and build output are excluded).
+
+### Fixed
+- The HTML report escapes the embedded graph data, so values containing `</script>`, `<!--` or U+2028/U+2029 no longer break the page or inject markup.
+
 ## [0.2.0] - 2026-03-17
 
 ### Added

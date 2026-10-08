@@ -9,9 +9,9 @@ export function getWebviewContent(
   summary: GraphSummary,
   warnings: ParseWarning[]
 ): string {
-  const graphJSON = JSON.stringify(graph);
-  const summaryJSON = JSON.stringify(summary);
-  const warningsJSON = JSON.stringify(warnings);
+  const graphJSON = toScriptJSON(graph);
+  const summaryJSON = toScriptJSON(summary);
+  const warningsJSON = toScriptJSON(warnings || []);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -60,6 +60,12 @@ ${getStyles()}
         <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
       </div>
     </header>
+    <div class="impact-banner" id="impactBanner">
+      <span class="impact-banner-icon">◎</span>
+      <span class="impact-banner-label" id="impactLabel"></span>
+      <span class="impact-banner-count" id="impactCount"></span>
+      <button class="path-mode-cancel" id="impactClear">Clear</button>
+    </div>
     <div class="path-mode-banner" id="pathModeBanner">
       <span class="path-mode-text">Click two components to find the path</span>
       <span class="path-mode-selection" id="pathSelection"></span>
@@ -110,9 +116,10 @@ ${getStyles()}
   <script>${cytoscapeBundleCode}</script>
   <script>
 const vscode = acquireVsCodeApi();
-const graphData = ${graphJSON};
-const summaryData = ${summaryJSON};
-const warningsData = ${warningsJSON};
+// Mutable: replaced in place by the 'updateGraph' message from the extension host.
+let graphData = ${graphJSON};
+let summaryData = ${summaryJSON};
+let warningsData = ${warningsJSON};
 
 function saveState(state) {
   vscode.setState(state);
@@ -125,6 +132,19 @@ ${getScript()}
   </script>
 </body>
 </html>`;
+}
+
+/**
+ * Serialize a value for embedding inside an inline <script> block.
+ * Escapes characters that could terminate the script element or break JS parsing.
+ */
+function toScriptJSON(value: unknown): string {
+  return (JSON.stringify(value === undefined ? null : value) || 'null')
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 function getStyles(): string {
@@ -571,6 +591,124 @@ function getStyles(): string {
       background: var(--vscode-button-secondaryHoverBackground);
     }
 
+    .impact-banner {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: var(--vscode-inputValidation-warningBackground, rgba(240, 136, 62, 0.15));
+      border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, #f0883e);
+      color: var(--vscode-foreground);
+      font-size: 12px;
+    }
+
+    .impact-banner.visible {
+      display: flex;
+    }
+
+    .impact-banner-icon {
+      color: #f0883e;
+      font-weight: 700;
+    }
+
+    .impact-banner-label {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 60%;
+    }
+
+    .impact-banner-count {
+      color: var(--vscode-descriptionForeground);
+    }
+
+    .env-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 500;
+      margin-left: 6px;
+      vertical-align: middle;
+      color: white;
+    }
+
+    .env-client {
+      background: #0d9488;
+    }
+
+    .env-server {
+      background: #6e40c9;
+    }
+
+    .detail-meta {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 2px;
+    }
+
+    .state-entry {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 2px 0;
+    }
+
+    .state-entry-meta {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    .nav-link {
+      cursor: pointer;
+      color: var(--vscode-textLink-foreground);
+    }
+
+    .nav-link:hover {
+      text-decoration: underline;
+    }
+
+    .line-link {
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    .line-link:hover {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: underline;
+    }
+
+    .insight-item {
+      padding: 4px 6px;
+      margin: 4px 0;
+      border-left: 3px solid var(--vscode-descriptionForeground);
+      background: var(--vscode-textBlockQuote-background);
+      border-radius: 2px;
+      font-size: 11px;
+      cursor: pointer;
+      line-height: 1.35;
+    }
+
+    .insight-item:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+
+    .insight-error { border-left-color: var(--vscode-editorError-foreground, #f85149); }
+    .insight-warning { border-left-color: var(--vscode-editorWarning-foreground, #d29922); }
+    .insight-info { border-left-color: var(--vscode-editorInfo-foreground, #58a6ff); }
+    .insight-hint { border-left-color: var(--vscode-descriptionForeground, #8b949e); }
+
+    .insight-code {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--vscode-descriptionForeground);
+    }
+
     .main {
       display: flex;
       flex: 1;
@@ -707,6 +845,8 @@ function getStyles(): string {
 
     .legend {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 4px;
       gap: 16px;
       padding: 8px 16px;
       background: var(--vscode-sideBar-background);
@@ -724,6 +864,24 @@ function getStyles(): string {
       width: 10px;
       height: 10px;
       border-radius: 2px;
+    }
+
+    .legend-color.legend-dot {
+      border-radius: 50%;
+    }
+
+    .legend-separator {
+      width: 1px;
+      align-self: stretch;
+      background: var(--vscode-panel-border);
+    }
+
+    .legend-heading {
+      color: var(--vscode-descriptionForeground);
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      align-self: center;
     }
 
     .warning-badge {
@@ -961,6 +1119,151 @@ function getScript(): string {
   const pathSelection = document.getElementById('pathSelection');
   const pathCancel = document.getElementById('pathCancel');
 
+  // Impact (highlight set) state - driven by the extension host
+  const impactBanner = document.getElementById('impactBanner');
+  const impactLabel = document.getElementById('impactLabel');
+  const impactCount = document.getElementById('impactCount');
+  const impactClear = document.getElementById('impactClear');
+  let impactState = null; // { ids: Set<string>, rootId: string|null, label: string }
+
+  // Selection tracking (component id of the node shown in the sidebar)
+  let selectedComponentId = null;
+  const DEFAULT_SIDEBAR_HTML = sidebar.innerHTML;
+
+  // Derived graph structures (rebuilt by processGraph)
+  let componentIdSet = new Set();
+  let childrenMap = new Map();   // parent id -> Set(child ids) (renders if available, else props edges)
+  let parentsMap = new Map();    // child id -> Set(parent ids)
+  let hasRendersData = false;
+
+  // Render sequencing: only the latest layout wins
+  let renderSeq = 0;
+  let readySent = false;
+
+  // Serialize async work (init, view switches, host messages) so they never interleave
+  let taskChain = Promise.resolve();
+  function enqueueTask(fn) {
+    const run = taskChain.then(() => fn());
+    taskChain = run.catch(err => console.error('[React State Map]', err));
+    return taskChain;
+  }
+
+  // HTML escaping for anything interpolated into innerHTML / attributes
+  function esc(value) {
+    return String(value === null || value === undefined ? '' : value).replace(/[&<>"']/g, ch => {
+      switch (ch) {
+        case '&': return '&amp;';
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '"': return '&quot;';
+        default: return '&#39;';
+      }
+    });
+  }
+
+  function normalizePath(filePath) {
+    return String(filePath || '').split(String.fromCharCode(92)).join('/');
+  }
+
+  function asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  // Make the graph tolerant of missing/optional fields (older and newer core versions)
+  function normalizeGraph(g) {
+    g = g && typeof g === 'object' ? g : {};
+    const components = {};
+    Object.entries(g.components || {}).forEach(([key, comp]) => {
+      if (!comp || typeof comp !== 'object') return;
+      components[key] = {
+        ...comp,
+        id: comp.id || key,
+        name: comp.name || String(comp.id || key),
+        filePath: normalizePath(comp.filePath),
+        stateUsed: asArray(comp.stateUsed),
+        stateProvided: asArray(comp.stateProvided),
+        contextProviders: asArray(comp.contextProviders),
+        contextConsumers: asArray(comp.contextConsumers),
+        props: asArray(comp.props)
+      };
+    });
+    return {
+      ...g,
+      components,
+      stateNodes: g.stateNodes && typeof g.stateNodes === 'object' ? g.stateNodes : {},
+      edges: asArray(g.edges),
+      contextBoundaries: asArray(g.contextBoundaries),
+      propDrillingPaths: asArray(g.propDrillingPaths),
+      componentMetrics: asArray(g.componentMetrics),
+      bundles: asArray(g.bundles),
+      contextLeaks: asArray(g.contextLeaks),
+      propChains: asArray(g.propChains),
+      renders: Array.isArray(g.renders) ? g.renders : undefined,
+      insights: asArray(g.insights)
+    };
+  }
+
+  graphData = normalizeGraph(graphData);
+  if (!Array.isArray(warningsData)) warningsData = [];
+
+  // State type palette (sidebar tags + legend)
+  const STATE_TYPE_COLORS = {
+    useState: '#1f6feb',
+    useReducer: '#388bfd',
+    useContext: '#8957e5',
+    zustand: '#bf8700',
+    redux: '#764abc',
+    customHook: '#2ea043',
+    props: '#6e7681',
+    serverState: '#f0883e',
+    atom: '#db61a2',
+    machine: '#da3633',
+    form: '#0ea5e9',
+    router: '#6366f1',
+    useActionState: '#65a30d',
+    useOptimistic: '#c026d3',
+    externalStore: '#57534e'
+  };
+  const STATE_TYPE_LABELS = {
+    useState: 'useState',
+    useReducer: 'useReducer',
+    useContext: 'useContext',
+    zustand: 'Zustand',
+    redux: 'Redux',
+    customHook: 'Custom Hook',
+    props: 'Props',
+    serverState: 'Server State',
+    atom: 'Atom',
+    machine: 'State Machine',
+    form: 'Form',
+    router: 'Router',
+    useActionState: 'useActionState',
+    useOptimistic: 'useOptimistic',
+    externalStore: 'External Store'
+  };
+  const STATE_TYPE_FALLBACK_COLOR = '#8b949e';
+
+  function getStateTypeColor(type) {
+    return STATE_TYPE_COLORS[type] || STATE_TYPE_FALLBACK_COLOR;
+  }
+
+  function getStateTypeLabel(type) {
+    return STATE_TYPE_LABELS[type] || String(type || 'unknown');
+  }
+
+  // State types actually present in the graph, in palette order
+  function getStateTypesInGraph() {
+    const present = new Set();
+    Object.values(graphData.components).forEach(comp => {
+      comp.stateProvided.forEach(s => { if (s && s.type) present.add(s.type); });
+    });
+    Object.values(graphData.stateNodes || {}).forEach(s => { if (s && s.type) present.add(s.type); });
+    present.delete('props');
+    const known = Object.keys(STATE_TYPE_COLORS).filter(t => present.has(t));
+    const unknown = Array.from(present).filter(t => !(t in STATE_TYPE_COLORS)).sort();
+    return known.concat(unknown);
+  }
+
   // Semantic zoom state
   const ZOOM_THRESHOLD_FAR = 0.4;
   const ZOOM_THRESHOLD_CLOSE = 0.8;
@@ -1060,24 +1363,327 @@ function getScript(): string {
   }
 
   // Initialize
-  init();
+  setupMessageListener();
+  enqueueTask(init);
 
   async function init() {
-    processGraph();
-    assignContextColors();
     setupEventListeners();
     setupFloatingPanel();
-    updateStats();
-    updateLegend();
-    updateLayerToggles();
     try {
-      await initCytoscape();
+      await render();
       // Restore zoom/pan if saved
       if (savedState.zoom && savedState.pan && cy) {
         cy.viewport({ zoom: savedState.zoom, pan: savedState.pan });
+        syncZoomLevel(true);
       }
     } finally {
       hideLoading();
+      if (!readySent) {
+        readySent = true;
+        vscode.postMessage({ command: 'ready' });
+      }
+    }
+  }
+
+  // Single render entry: (re)derive everything from graphData and lay out the graph.
+  async function render(options) {
+    processGraph();
+    assignContextColors();
+    updateStats();
+    updateLegend();
+    updateLayerToggles();
+    await initCytoscape(options);
+  }
+
+  // ============================================
+  // Extension host -> webview messages
+  // ============================================
+  function setupMessageListener() {
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (!message || typeof message !== 'object') return;
+      switch (message.command) {
+        case 'focusNode':
+          enqueueTask(() => handleFocusNode(message.componentId));
+          break;
+        case 'highlightSet':
+          enqueueTask(() => handleHighlightSet(message));
+          break;
+        case 'clearHighlight':
+          enqueueTask(() => clearImpact());
+          break;
+        case 'updateGraph':
+          enqueueTask(() => handleUpdateGraph(message));
+          break;
+      }
+    });
+  }
+
+  async function setView(view) {
+    if (view === currentView && cy) return;
+    currentView = view;
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.view === currentView));
+    updateLegend();
+    updateLayerToggles();
+    showLoading();
+    try {
+      await initCytoscape();
+    } finally {
+      hideLoading();
+    }
+    persistState();
+  }
+
+  // Expand any collapsed node that hides one of the given component ids. Returns true if changed.
+  function expandAncestorsOf(ids) {
+    const targets = new Set(ids);
+    let changed = false;
+    Array.from(collapsedNodes).forEach(collapsedId => {
+      const descendants = getDescendants(collapsedId);
+      for (const id of targets) {
+        if (descendants.has(id)) {
+          collapsedNodes.delete(collapsedId);
+          changed = true;
+          break;
+        }
+      }
+    });
+    return changed;
+  }
+
+  async function handleFocusNode(componentId) {
+    if (typeof componentId !== 'string' || !graphData.components[componentId]) return;
+    hideSearchResults();
+    if (currentView !== 'flow') {
+      await setView('flow');
+    }
+    if (expandAncestorsOf([componentId])) {
+      await initCytoscape({ preserveViewport: true });
+    }
+    revealComponent(componentId);
+  }
+
+  async function handleHighlightSet(message) {
+    const ids = asArray(message.componentIds).filter(id => typeof id === 'string');
+    impactState = {
+      ids: new Set(ids),
+      rootId: typeof message.rootId === 'string' ? message.rootId : null,
+      label: typeof message.label === 'string' && message.label ? message.label : 'Impact'
+    };
+    if (impactState.rootId) impactState.ids.add(impactState.rootId);
+    if (pathMode) exitPathMode();
+    window.clearFocus();
+    if (currentView === 'drilling') {
+      await setView('flow');
+    }
+    if (expandAncestorsOf(Array.from(impactState.ids))) {
+      await initCytoscape({ preserveViewport: true });
+    }
+    applyImpactClasses();
+    updateImpactBanner();
+    fitToImpact();
+  }
+
+  function clearImpact() {
+    impactState = null;
+    if (cy) cy.elements().removeClass('impact-member impact-root impact-dimmed impact-edge');
+    updateImpactBanner();
+  }
+
+  function updateImpactBanner() {
+    if (!impactState) {
+      impactBanner.classList.remove('visible');
+      return;
+    }
+    const present = Array.from(impactState.ids).filter(id => componentIdSet.has(id)).length;
+    impactLabel.textContent = impactState.label;
+    impactCount.textContent = present === 0
+      ? '(no matching components in graph)'
+      : '(' + present + ' component' + (present === 1 ? '' : 's') + ')';
+    impactBanner.classList.add('visible');
+  }
+
+  function getNodeComponentId(node) {
+    const comp = node.data('componentData');
+    return comp && comp.id ? comp.id : node.id();
+  }
+
+  function applyImpactClasses() {
+    if (!cy) return;
+    cy.elements().removeClass('impact-member impact-root impact-dimmed impact-edge');
+    if (!impactState) return;
+    const ids = impactState.ids;
+    const anyPresent = Array.from(ids).some(id => componentIdSet.has(id));
+    if (!anyPresent) return;
+
+    const memberNodeIds = new Set();
+    cy.batch(() => {
+      cy.nodes().forEach(n => {
+        let isMember = false;
+        let isRoot = false;
+        if (n.data('nodeType') === 'directory') {
+          const dir = directories.get(n.data('dirPath'));
+          if (dir) {
+            for (const id of ids) {
+              if (dir.componentIds.has(id)) { isMember = true; break; }
+            }
+          }
+        } else {
+          const compId = getNodeComponentId(n);
+          isMember = ids.has(compId);
+          isRoot = isMember && impactState.rootId === compId;
+        }
+        if (isRoot) {
+          n.addClass('impact-root');
+        } else if (isMember) {
+          n.addClass('impact-member');
+        } else {
+          n.addClass('impact-dimmed');
+        }
+        if (isMember) memberNodeIds.add(n.id());
+      });
+      cy.edges().forEach(e => {
+        if (memberNodeIds.has(e.data('source')) && memberNodeIds.has(e.data('target'))) {
+          e.addClass('impact-edge');
+        } else {
+          e.addClass('impact-dimmed');
+        }
+      });
+    });
+  }
+
+  function fitToImpact() {
+    if (!cy || !impactState) return;
+    // Make sure component nodes are displayed so the bounding box is meaningful
+    if (currentZoomLevel === 'far') {
+      currentZoomLevel = 'close';
+      applySemanticZoom();
+    }
+    const members = cy.nodes('.impact-member, .impact-root').filter(n => n.data('nodeType') !== 'directory');
+    if (members.length === 0) return;
+    cy.stop(true);
+    cy.animate({
+      fit: { eles: members, padding: 60 }
+    }, {
+      duration: 350,
+      easing: 'ease-out',
+      complete: () => syncZoomLevel()
+    });
+  }
+
+  async function handleUpdateGraph(message) {
+    if (!message.graph) return;
+    graphData = normalizeGraph(message.graph);
+    if (message.summary) summaryData = message.summary;
+    warningsData = asArray(message.warnings);
+
+    // Prune state that refers to components which no longer exist
+    collapsedNodes = new Set(Array.from(collapsedNodes).filter(id => graphData.components[id]));
+    if (focusedNodeId && !graphData.components[focusedNodeId]) focusedNodeId = null;
+    if ((pathStart && !graphData.components[pathStart]) || (pathEnd && !graphData.components[pathEnd])) {
+      pathStart = null;
+      pathEnd = null;
+      pathSelection.textContent = '';
+    }
+    hideSearchResults();
+    currentSearchResults = [];
+
+    await render({ preserveViewport: true });
+    updateImpactBanner();
+    restoreSelection();
+  }
+
+  function findCyNodeForComponent(componentId) {
+    if (!cy) return null;
+    const direct = cy.getElementById(componentId);
+    if (direct.length > 0) return direct;
+    const match = cy.nodes().filter(n => {
+      const comp = n.data('componentData');
+      return !!comp && comp.id === componentId;
+    });
+    return match.length > 0 ? match[0] : null;
+  }
+
+  function restoreSelection() {
+    if (!selectedComponentId) return;
+    const comp = graphData.components[selectedComponentId];
+    if (!comp) {
+      selectedComponentId = null;
+      sidebar.innerHTML = DEFAULT_SIDEBAR_HTML;
+      return;
+    }
+    const node = findCyNodeForComponent(selectedComponentId);
+    if (node) {
+      cy.$(':selected').unselect();
+      node.select();
+      showNodeDetails(node.data());
+    } else {
+      showNodeDetails({ id: comp.id, componentData: comp });
+    }
+  }
+
+  // Center on a component node, flash it, select it and open its details.
+  function revealComponent(componentId) {
+    if (!cy) return;
+    const node = findCyNodeForComponent(componentId);
+    if (!node) return;
+
+    // Make sure we're at a zoom level that shows components
+    if (currentZoomLevel === 'far') {
+      currentZoomLevel = 'close';
+      applySemanticZoom();
+    }
+
+    cy.stop(true);
+    cy.animate({
+      center: { eles: node },
+      zoom: Math.max(cy.zoom(), 1)
+    }, {
+      duration: 300,
+      easing: 'ease-out',
+      complete: () => {
+        syncZoomLevel();
+        node.addClass('search-highlight');
+        setTimeout(() => node.removeClass('search-highlight'), 2000);
+        cy.$(':selected').unselect();
+        node.select();
+        showNodeDetails(node.data());
+      }
+    });
+  }
+
+  function computeZoomLevel(zoom) {
+    if (zoom < ZOOM_THRESHOLD_FAR) return 'far';
+    if (zoom < ZOOM_THRESHOLD_CLOSE) return 'medium';
+    return 'close';
+  }
+
+  // Recompute semantic zoom level from the actual viewport (force re-applies classes)
+  function syncZoomLevel(force) {
+    if (!cy) return;
+    const level = computeZoomLevel(cy.zoom());
+    if (force || level !== currentZoomLevel) {
+      currentZoomLevel = level;
+      applySemanticZoom();
+    }
+  }
+
+  // Re-apply overlays (impact / focus / path) after elements were rebuilt
+  function reapplyOverlays() {
+    applyImpactClasses();
+    if (focusedNodeId) {
+      if (cy.getElementById(focusedNodeId).length > 0) {
+        applyFocusClasses(focusedNodeId);
+      } else {
+        focusedNodeId = null;
+      }
+    }
+    if (pathMode && pathStart) {
+      cy.getElementById(pathStart).addClass('path-start');
+      if (pathEnd) {
+        cy.getElementById(pathEnd).addClass('path-end');
+        findAndHighlightPath(false);
+      }
     }
   }
 
@@ -1139,20 +1745,25 @@ function getScript(): string {
 
   function setupEventListeners() {
     tabs.forEach(tab => {
-      tab.addEventListener('click', async () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        currentView = tab.dataset.view;
-        updateLegend();
-        updateLayerToggles();
-        showLoading();
-        try {
-          await initCytoscape();
-        } finally {
-          hideLoading();
-        }
-        persistState();
+      tab.addEventListener('click', () => {
+        const view = tab.dataset.view;
+        enqueueTask(() => setView(view));
       });
+    });
+
+    impactClear.addEventListener('click', () => {
+      clearImpact();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (impactState) {
+        clearImpact();
+      } else if (pathMode) {
+        exitPathMode();
+      }
     });
 
     refreshBtn.addEventListener('click', () => {
@@ -1315,18 +1926,24 @@ function getScript(): string {
       }
     } else if (!pathEnd && nodeId !== pathStart) {
       pathEnd = nodeId;
-      const startNode = nodes.find(n => n.id === pathStart);
-      pathSelection.textContent = (startNode?.name || pathStart) + ' → ' + nodeName;
       if (cy) {
         cy.getElementById(nodeId).addClass('path-end');
       }
       // Find and highlight the path
-      findAndHighlightPath();
+      findAndHighlightPath(true);
     }
   }
 
-  function findAndHighlightPath() {
+  function getPathEndpointsText() {
+    const startNode = nodes.find(n => n.id === pathStart);
+    const endNode = nodes.find(n => n.id === pathEnd);
+    return (startNode?.name || pathStart) + ' → ' + (endNode?.name || pathEnd);
+  }
+
+  function findAndHighlightPath(fit) {
     if (!cy || !pathStart || !pathEnd) return;
+    pathSelection.textContent = getPathEndpointsText();
+    cy.elements().removeClass('path-highlight');
 
     // Build adjacency list from edges
     const adjacency = new Map();
@@ -1348,7 +1965,7 @@ function getScript(): string {
 
       if (node === pathEnd) {
         // Found the path!
-        highlightPath(path, edges);
+        highlightPath(path, edges, fit);
         return;
       }
 
@@ -1369,7 +1986,7 @@ function getScript(): string {
     pathSelection.textContent += ' (no path found)';
   }
 
-  function highlightPath(nodePath, edgePath) {
+  function highlightPath(nodePath, edgePath, fit) {
     if (!cy) return;
 
     // Highlight nodes in path
@@ -1390,7 +2007,8 @@ function getScript(): string {
 
     // Fit view to show the path
     const pathElements = cy.elements('.path-highlight');
-    if (pathElements.length > 0) {
+    if (fit !== false && pathElements.length > 0) {
+      cy.stop(true);
       cy.animate({
         fit: { eles: pathElements, padding: 50 }
       }, {
@@ -1408,10 +2026,30 @@ function getScript(): string {
   window.focusOnNode = function(nodeId) {
     if (!cy) return;
 
-    focusedNodeId = nodeId;
     const node = cy.getElementById(nodeId);
     if (node.length === 0) return;
+    focusedNodeId = nodeId;
 
+    applyFocusClasses(nodeId);
+
+    // Fit to focused elements
+    const focusedElements = cy.elements('.focused');
+    if (focusedElements.length > 0) {
+      cy.stop(true);
+      cy.animate({
+        fit: { eles: focusedElements, padding: 50 }
+      }, {
+        duration: 300,
+        easing: 'ease-out',
+        complete: () => syncZoomLevel()
+      });
+    }
+
+    // Refresh sidebar to show clear button
+    showNodeDetails(node.data());
+  };
+
+  function applyFocusClasses(nodeId) {
     // Get all connected nodes (1-hop neighbors)
     const connectedEdges = cy.edges().filter(edge =>
       edge.data('source') === nodeId || edge.data('target') === nodeId
@@ -1442,26 +2080,18 @@ function getScript(): string {
         e.addClass('dimmed');
       }
     });
-
-    // Fit to focused elements
-    const focusedElements = cy.elements('.focused');
-    if (focusedElements.length > 0) {
-      cy.animate({
-        fit: { eles: focusedElements, padding: 50 }
-      }, {
-        duration: 300,
-        easing: 'ease-out'
-      });
-    }
-
-    // Refresh sidebar to show clear button
-    showNodeDetails(node.data());
-  };
+  }
 
   window.clearFocus = function() {
+    const hadFocus = focusedNodeId !== null;
     focusedNodeId = null;
     if (cy) {
       cy.elements().removeClass('focused dimmed');
+    }
+    // Refresh sidebar so the "Clear Focus" button disappears
+    if (hadFocus && selectedComponentId && graphData.components[selectedComponentId]) {
+      const node = findCyNodeForComponent(selectedComponentId);
+      showNodeDetails(node ? node.data() : { componentData: graphData.components[selectedComponentId] });
     }
   };
 
@@ -1479,7 +2109,7 @@ function getScript(): string {
       .map(node => {
         const name = node.name.toLowerCase();
         const path = (node.data.filePath || '').toLowerCase();
-        const props = (node.data.propsReceived || []).join(' ').toLowerCase();
+        const props = (node.data.props || []).map(p => p && p.name).join(' ').toLowerCase();
 
         // Calculate match score
         let score = 0;
@@ -1513,8 +2143,8 @@ function getScript(): string {
 
         return \`
           <div class="search-result-item\${index === selectedSearchIndex ? ' selected' : ''}" data-index="\${index}">
-            <div class="search-result-name">\${result.name}\${badges}</div>
-            <div class="search-result-path">\${result.data.filePath || ''}</div>
+            <div class="search-result-name">\${esc(result.name)}\${badges}</div>
+            <div class="search-result-path">\${esc(result.data.filePath || '')}</div>
           </div>
         \`;
       }).join('');
@@ -1543,37 +2173,12 @@ function getScript(): string {
 
   function selectSearchResult(result) {
     hideSearchResults();
+    if (!result) return;
     searchInput.value = result.name;
     searchInput.blur();
 
     // Find and focus on the node in Cytoscape
-    if (cy) {
-      const node = cy.getElementById(result.id);
-      if (node.length > 0) {
-        // Make sure we're at a zoom level that shows components
-        if (currentZoomLevel === 'far') {
-          currentZoomLevel = 'close';
-          applySemanticZoom();
-        }
-
-        // Center on the node with animation
-        cy.animate({
-          center: { eles: node },
-          zoom: Math.max(cy.zoom(), 1)
-        }, {
-          duration: 300,
-          easing: 'ease-out',
-          complete: () => {
-            // Highlight the node
-            node.addClass('search-highlight');
-            setTimeout(() => node.removeClass('search-highlight'), 2000);
-
-            // Show node details
-            showNodeDetails(node.data());
-          }
-        });
-      }
-    }
+    revealComponent(result.id);
   }
 
   function updateEdgeVisibility() {
@@ -1594,10 +2199,30 @@ function getScript(): string {
     });
   }
 
+  function addRelation(map, key, value) {
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(value);
+  }
+
   function processGraph() {
     nodes = [];
     directories.clear();
     const components = Object.values(graphData.components);
+    componentIdSet = new Set(components.map(c => c.id));
+
+    // Parent -> child hierarchy: prefer explicit JSX render relations, fall back to props edges
+    hasRendersData = Array.isArray(graphData.renders);
+    childrenMap = new Map();
+    parentsMap = new Map();
+    const hierarchySource = hasRendersData
+      ? graphData.renders
+      : graphData.edges.filter(e => e.mechanism === 'props');
+    hierarchySource.forEach(rel => {
+      if (!rel || rel.from === rel.to) return;
+      if (!componentIdSet.has(rel.from) || !componentIdSet.has(rel.to)) return;
+      addRelation(childrenMap, rel.from, rel.to);
+      addRelation(parentsMap, rel.to, rel.from);
+    });
 
     components.forEach((comp) => {
       const hasState = comp.stateProvided.length > 0;
@@ -1658,7 +2283,7 @@ function getScript(): string {
   }
 
   function getDirectoryPath(filePath) {
-    const parts = filePath.split('/');
+    const parts = normalizePath(filePath).split('/');
     parts.pop(); // Remove filename
 
     // Remove component folder (PascalCase directory that likely contains the component)
@@ -1699,7 +2324,11 @@ function getScript(): string {
   }
 
   function getNodeWidth(node) {
-    return Math.max(100, node.name.length * 8 + 24);
+    return Math.max(100, String(node.name || '').length * 8 + 24);
+  }
+
+  function getDirectoryNodeId(dirPath) {
+    return '__dir__:' + dirPath;
   }
 
   // Get descendants for collapse
@@ -1713,14 +2342,14 @@ function getScript(): string {
       if (visited.has(current)) continue;
       visited.add(current);
 
-      graphData.edges
-        .filter(e => e.from === current && e.mechanism === 'props')
-        .forEach(e => {
-          if (e.to !== nodeId) {
-            descendants.add(e.to);
-            queue.push(e.to);
-          }
-        });
+      const children = childrenMap.get(current);
+      if (!children) continue;
+      children.forEach(child => {
+        if (child !== nodeId) {
+          descendants.add(child);
+          queue.push(child);
+        }
+      });
     }
     return descendants;
   }
@@ -1791,56 +2420,82 @@ function getScript(): string {
     }
   }
 
-  // Initialize Cytoscape
-  async function initCytoscape() {
+  // Initialize Cytoscape (or rebuild its elements in place).
+  // options.preserveViewport keeps the current zoom/pan (used for graph updates / expand).
+  async function initCytoscape(options) {
+    options = options || {};
+    const seq = ++renderSeq;
     const container = document.getElementById('cy');
 
     if (nodes.length === 0) {
+      if (cy) {
+        cy.destroy();
+        cy = null;
+      }
       container.innerHTML = '<div class="empty-state"><h2>No React components found</h2><p>Make sure your workspace contains .tsx or .jsx files with React components</p></div>';
-      return;
+      return false;
     }
 
     // Build elements based on current view
     const elements = await buildElements();
+    if (seq !== renderSeq) return false; // a newer render superseded this one
 
-    // Create or update Cytoscape instance
+    const previousViewport = cy ? { zoom: cy.zoom(), pan: { x: cy.pan().x, y: cy.pan().y } } : null;
+
     if (cy) {
-      cy.destroy();
-    }
-
-    cy = cytoscape({
-      container: container,
-      elements: elements,
-      style: getCytoscapeStyles(),
-      layout: { name: 'preset' },
-      minZoom: 0.02,
-      maxZoom: 3,
-      wheelSensitivity: 0.3,
-      // Performance options for large graphs
-      hideEdgesOnViewport: nodes.length > 100,
-      textureOnViewport: nodes.length > 200,
-      pixelRatio: 'auto',
-    });
-
-    // Set up interactions
-    setupCytoscapeInteractions();
-
-    // Set up semantic zoom
-    setupSemanticZoom();
-
-    // Fit to view
-    cy.fit(50);
-
-    // Apply semantic zoom after fit (to handle initial zoom level)
-    const initialZoom = cy.zoom();
-    if (initialZoom < ZOOM_THRESHOLD_FAR) {
-      currentZoomLevel = 'far';
-    } else if (initialZoom < ZOOM_THRESHOLD_CLOSE) {
-      currentZoomLevel = 'medium';
+      // Replace elements in place: no canvas teardown, no flash
+      cy.stop(true);
+      hoveredNodeId = null;
+      cy.batch(() => {
+        cy.elements().remove();
+        cy.add(elements);
+      });
     } else {
-      currentZoomLevel = 'close';
+      container.innerHTML = '';
+      cy = cytoscape({
+        container: container,
+        elements: elements,
+        style: getCytoscapeStyles(),
+        layout: { name: 'preset' },
+        minZoom: 0.02,
+        maxZoom: 3,
+        wheelSensitivity: 0.3,
+        // Performance options for large graphs
+        hideEdgesOnViewport: nodes.length > 100,
+        textureOnViewport: nodes.length > 200,
+        pixelRatio: 'auto',
+      });
+
+      // Set up interactions
+      setupCytoscapeInteractions();
+
+      // Set up semantic zoom
+      setupSemanticZoom();
     }
-    applySemanticZoom();
+
+    if (options.preserveViewport && previousViewport) {
+      cy.viewport(previousViewport);
+      if (!viewportShowsGraph()) cy.fit(50);
+    } else {
+      cy.fit(50);
+    }
+
+    // Apply semantic zoom for the resulting zoom level
+    syncZoomLevel(true);
+
+    reapplyOverlays();
+    return true;
+  }
+
+  // True if at least one component node lies within the visible viewport
+  function viewportShowsGraph() {
+    if (!cy) return false;
+    const ext = cy.extent();
+    return cy.nodes().some(n => {
+      if (n.data('nodeType') === 'directory') return false;
+      const p = n.position();
+      return p.x >= ext.x1 && p.x <= ext.x2 && p.y >= ext.y1 && p.y <= ext.y2;
+    });
   }
 
   function setupSemanticZoom() {
@@ -1857,13 +2512,7 @@ function getScript(): string {
       if (now - lastZoomUpdate < 100) return;
       lastZoomUpdate = now;
 
-      const zoom = cy.zoom();
-      let newLevel = 'close';
-      if (zoom < ZOOM_THRESHOLD_FAR) {
-        newLevel = 'far';
-      } else if (zoom < ZOOM_THRESHOLD_CLOSE) {
-        newLevel = 'medium';
-      }
+      const newLevel = computeZoomLevel(cy.zoom());
 
       if (newLevel !== currentZoomLevel) {
         currentZoomLevel = newLevel;
@@ -1901,12 +2550,14 @@ function getScript(): string {
       directoryEdges.addClass('zoom-hidden');
     }
 
-    // Update zoom indicator
+    // Re-apply edge layer filters
     updateEdgeVisibility();
   }
 
   async function buildElements() {
     const visibleNodes = getVisibleNodes();
+    const visibleIds = new Set(visibleNodes.map(n => n.id));
+    const isVisibleEdge = (from, to) => visibleIds.has(from) && visibleIds.has(to);
     const elements = [];
 
     // Prepare nodes for ELK layout
@@ -1919,11 +2570,24 @@ function getScript(): string {
       data: node.data
     }));
 
-    // Get edges for layout
-    const layoutEdges = graphData.edges
+    // Get edges for layout (props + context, plus render hierarchy when available)
+    const layoutEdgeKeys = new Set();
+    const layoutEdges = [];
+    const addLayoutEdge = (from, to) => {
+      if (from === to || !isVisibleEdge(from, to)) return;
+      const key = JSON.stringify([from, to]);
+      if (layoutEdgeKeys.has(key)) return;
+      layoutEdgeKeys.add(key);
+      layoutEdges.push({ source: from, target: to });
+    };
+    graphData.edges
       .filter(e => e.mechanism === 'props' || e.mechanism === 'context')
-      .filter(e => visibleNodes.some(n => n.id === e.from) && visibleNodes.some(n => n.id === e.to))
-      .map(e => ({ source: e.from, target: e.to }));
+      .forEach(e => addLayoutEdge(e.from, e.to));
+    if (hasRendersData) {
+      childrenMap.forEach((children, parent) => {
+        children.forEach(child => addLayoutEdge(parent, child));
+      });
+    }
 
     // Get directory edges
     const dirEdges = [];
@@ -1934,8 +2598,8 @@ function getScript(): string {
         if (!dirEdgeSet.has(edgeKey)) {
           dirEdgeSet.add(edgeKey);
           dirEdges.push({
-            source: 'dir_' + dirPath.replace(/[^a-zA-Z0-9]/g, '_'),
-            target: 'dir_' + targetDir.replace(/[^a-zA-Z0-9]/g, '_'),
+            source: getDirectoryNodeId(dirPath),
+            target: getDirectoryNodeId(targetDir),
             weight: count
           });
         }
@@ -1953,6 +2617,7 @@ function getScript(): string {
 
     // Calculate directory positions as centroid of their components (not separate layout)
     const positionedDirNodes = [];
+    const positionedDirIds = new Set();
     directories.forEach((dir, dirPath) => {
       // Find positions of all components in this directory (dir.components contains objects, use .id)
       const componentPositions = dir.components
@@ -1964,8 +2629,10 @@ function getScript(): string {
         const centroidX = componentPositions.reduce((sum, p) => sum + p.x, 0) / componentPositions.length;
         const centroidY = componentPositions.reduce((sum, p) => sum + p.y, 0) / componentPositions.length;
 
+        const dirNodeId = getDirectoryNodeId(dirPath);
+        positionedDirIds.add(dirNodeId);
         positionedDirNodes.push({
-          id: 'dir_' + dirPath.replace(/[^a-zA-Z0-9]/g, '_'),
+          id: dirNodeId,
           x: centroidX,
           y: centroidY,
           width: Math.max(600, dir.name.length * 30 + 300),
@@ -1979,7 +2646,7 @@ function getScript(): string {
 
     // Create Cytoscape node elements for components
     positionedNodes.forEach(node => {
-      const hasChildren = graphData.edges.some(e => e.from === node.id && e.mechanism === 'props');
+      const hasChildren = childrenMap.has(node.id);
       const isCollapsed = collapsedNodes.has(node.id);
       const descendantCount = isCollapsed ? getDescendants(node.id).size : 0;
 
@@ -1996,6 +2663,7 @@ function getScript(): string {
           id: node.id,
           label: node.name + (isCollapsed && descendantCount > 0 ? ' (+' + descendantCount + ')' : ''),
           nodeType: nodeType,
+          environment: node.data.environment || '',
           hasChildren: hasChildren,
           isCollapsed: isCollapsed,
           componentData: node.data,
@@ -2029,12 +2697,13 @@ function getScript(): string {
       });
     });
 
-    // Create directory edges
+    // Create directory edges (only between directories that have a node)
     dirEdges.forEach((edge, i) => {
+      if (!positionedDirIds.has(edge.source) || !positionedDirIds.has(edge.target)) return;
       elements.push({
         group: 'edges',
         data: {
-          id: 'dir_e_' + i,
+          id: '__dir_e__' + i,
           source: edge.source,
           target: edge.target,
           edgeType: 'directory',
@@ -2047,12 +2716,12 @@ function getScript(): string {
     // Create edge elements based on view
     if (currentView === 'flow') {
       graphData.edges.forEach((edge, i) => {
-        if (!visibleNodes.some(n => n.id === edge.from) || !visibleNodes.some(n => n.id === edge.to)) return;
+        if (!isVisibleEdge(edge.from, edge.to)) return;
 
         elements.push({
           group: 'edges',
           data: {
-            id: 'e' + i,
+            id: '__e__' + i,
             source: edge.from,
             target: edge.to,
             edgeType: edge.mechanism,
@@ -2062,14 +2731,33 @@ function getScript(): string {
       });
     } else if (currentView === 'context') {
       // Show hierarchy edges (subtle) and context edges (prominent)
+      if (hasRendersData) {
+        // Explicit JSX render relations (parent renders child)
+        let hierarchyIndex = 0;
+        childrenMap.forEach((children, parent) => {
+          children.forEach(child => {
+            if (!isVisibleEdge(parent, child)) return;
+            elements.push({
+              group: 'edges',
+              data: {
+                id: '__eh__' + (hierarchyIndex++),
+                source: parent,
+                target: child,
+                edgeType: 'hierarchy'
+              }
+            });
+          });
+        });
+      }
       graphData.edges.forEach((edge, i) => {
-        if (!visibleNodes.some(n => n.id === edge.from) || !visibleNodes.some(n => n.id === edge.to)) return;
+        if (!isVisibleEdge(edge.from, edge.to)) return;
 
-        if (edge.mechanism === 'props') {
+        if (edge.mechanism === 'props' && !hasRendersData) {
+          // Legacy: infer hierarchy from props edges
           elements.push({
             group: 'edges',
             data: {
-              id: 'eh' + i,
+              id: '__eh__' + i,
               source: edge.from,
               target: edge.to,
               edgeType: 'hierarchy',
@@ -2080,7 +2768,7 @@ function getScript(): string {
           elements.push({
             group: 'edges',
             data: {
-              id: 'ec' + i,
+              id: '__ec__' + i,
               source: edge.from,
               target: edge.to,
               edgeType: 'context',
@@ -2105,21 +2793,23 @@ function getScript(): string {
 
         graphData.propDrillingPaths.forEach((drillingPath, pathIndex) => {
           const chainX = START_X + pathIndex * HORIZONTAL_GAP;
+          const pathEntries = asArray(drillingPath.path);
 
-          drillingPath.path.forEach((componentName, index) => {
-            const originalNode = nodes.find(n => n.name === componentName);
+          pathEntries.forEach((componentRef, index) => {
+            // Paths may reference component ids or component names
+            const originalNode = nodes.find(n => n.id === componentRef) || nodes.find(n => n.name === componentRef);
             if (!originalNode) return;
 
             const nodeId = 'drill_' + pathIndex + '_' + index;
             let nodeType = 'passthrough';
             if (index === 0) nodeType = 'origin';
-            else if (index === drillingPath.path.length - 1) nodeType = 'consumer';
+            else if (index === pathEntries.length - 1) nodeType = 'consumer';
 
             elements.push({
               group: 'nodes',
               data: {
                 id: nodeId,
-                label: componentName,
+                label: originalNode.name,
                 nodeType: nodeType,
                 componentData: originalNode.data,
                 width: getNodeWidth(originalNode),
@@ -2130,20 +2820,25 @@ function getScript(): string {
               },
               position: { x: chainX, y: START_Y + index * VERTICAL_GAP }
             });
-
-            // Add edge to next node in chain
-            if (index < drillingPath.path.length - 1) {
-              elements.push({
-                group: 'edges',
-                data: {
-                  id: 'drill_e_' + pathIndex + '_' + index,
-                  source: nodeId,
-                  target: 'drill_' + pathIndex + '_' + (index + 1),
-                  edgeType: 'drilling'
-                }
-              });
-            }
           });
+
+          // Add edges between consecutive nodes that exist in the chain
+          for (let index = 0; index < pathEntries.length - 1; index++) {
+            const sourceId = 'drill_' + pathIndex + '_' + index;
+            const targetId = 'drill_' + pathIndex + '_' + (index + 1);
+            const hasSource = elements.some(el => el.group === 'nodes' && el.data.id === sourceId);
+            const hasTarget = elements.some(el => el.group === 'nodes' && el.data.id === targetId);
+            if (!hasSource || !hasTarget) continue;
+            elements.push({
+              group: 'edges',
+              data: {
+                id: 'drill_e_' + pathIndex + '_' + index,
+                source: sourceId,
+                target: targetId,
+                edgeType: 'drilling'
+              }
+            });
+          }
         });
       }
     }
@@ -2449,6 +3144,41 @@ function getScript(): string {
         style: {
           'opacity': 0.15
         }
+      },
+      // Impact mode (highlight set from the extension host)
+      {
+        selector: '.impact-dimmed',
+        style: {
+          'opacity': 0.08
+        }
+      },
+      {
+        selector: 'node.impact-member',
+        style: {
+          'opacity': 1,
+          'border-width': 3,
+          'border-color': '#f0883e',
+          'z-index': 9990
+        }
+      },
+      {
+        selector: 'node.impact-root',
+        style: {
+          'opacity': 1,
+          'border-width': 5,
+          'border-style': 'double',
+          'border-color': '#ff7b72',
+          'font-weight': 'bold',
+          'z-index': 9995
+        }
+      },
+      {
+        selector: 'edge.impact-edge',
+        style: {
+          'opacity': 0.95,
+          'width': 2.5,
+          'z-index': 9990
+        }
       }
     ];
   }
@@ -2477,14 +3207,11 @@ function getScript(): string {
     });
 
     // Double-click to collapse/expand
-    cy.on('dbltap', 'node', async function(evt) {
+    cy.on('dbltap', 'node', function(evt) {
       const node = evt.target;
-      const nodeId = node.data('id').replace(/^drill_\\d+_\\d+$/, (m) => {
-        const parts = m.split('_');
-        return nodes[parseInt(parts[2])]?.id || m;
-      });
-
-      const originalId = node.data('componentData')?.id || nodeId;
+      if (node.data('nodeType') === 'directory') return;
+      const originalId = node.data('componentData')?.id || node.id();
+      if (!componentIdSet.has(originalId)) return;
 
       if (collapsedNodes.has(originalId)) {
         collapsedNodes.delete(originalId);
@@ -2492,7 +3219,7 @@ function getScript(): string {
         collapsedNodes.add(originalId);
       }
 
-      await initCytoscape();
+      enqueueTask(() => initCytoscape());
     });
   }
 
@@ -2532,15 +3259,27 @@ function getScript(): string {
   }
 
   function clearHighlights() {
+    if (!cy) return;
     cy.edges().removeClass('highlight-direct highlight-2hop');
     cy.nodes().removeClass('connected');
   }
 
+  function getComponentName(id) {
+    const comp = graphData.components[id];
+    return comp ? comp.name : String(id || 'Unknown');
+  }
+
+  function fileLabel(filePath, line) {
+    const name = normalizePath(filePath).split('/').pop() || filePath || '';
+    return name + (line ? ':' + line : '');
+  }
+
   function showNodeDetails(data) {
-    const comp = data.componentData;
+    const comp = data && data.componentData;
     if (!comp) return;
 
-    const fileName = comp.filePath.split('/').pop();
+    selectedComponentId = comp.id;
+    const fileName = normalizePath(comp.filePath).split('/').pop();
 
     // Find metrics for this component
     const metrics = graphData.componentMetrics?.find(m => m.componentId === comp.id);
@@ -2553,21 +3292,34 @@ function getScript(): string {
         transformer: 'role-transformer',
         mixed: 'role-mixed'
       };
-      roleHtml = \`<span class="role-badge \${roleColors[metrics.role]}">\${metrics.role}</span>\`;
+      roleHtml = \`<span class="role-badge \${roleColors[metrics.role] || ''}">\${esc(metrics.role)}</span>\`;
     }
+
+    let envHtml = '';
+    if (comp.environment === 'client' || comp.environment === 'server') {
+      const envTitle = comp.directive ? '"' + comp.directive + '" directive' : comp.environment + ' component';
+      envHtml = \`<span class="env-badge env-\${comp.environment}" title="\${esc(envTitle)}">\${comp.environment}</span>\`;
+    }
+
+    const lineRange = comp.endLine && comp.endLine > comp.line ? comp.line + '–' + comp.endLine : String(comp.line);
+    const metaParts = [];
+    if (comp.kind) metaParts.push(comp.kind);
+    if (comp.directive) metaParts.push("'" + comp.directive + "'");
+    if (comp.isExported) metaParts.push('exported');
 
     let html = \`
       <div class="sidebar-content">
         <div class="sidebar-section">
-          <h3>\${comp.name}\${roleHtml}</h3>
-          <a class="file-link" data-path="\${comp.filePath}" data-line="\${comp.line}">
-            \${fileName}:\${comp.line}
+          <h3>\${esc(comp.name)}\${envHtml}\${roleHtml}</h3>
+          <a class="file-link" data-path="\${esc(comp.filePath)}" data-line="\${esc(comp.line)}" title="\${esc(comp.filePath)}">
+            \${esc(fileName)}:\${esc(lineRange)}
           </a>
+          \${metaParts.length > 0 ? '<div class="detail-meta">' + esc(metaParts.join(' · ')) + '</div>' : ''}
           <div class="sidebar-actions">
-            <button class="sidebar-btn" onclick="window.focusOnNode('\${comp.id}')" title="Focus on this component and its neighbors">
+            <button class="sidebar-btn" data-action="focus" title="Focus on this component and its neighbors">
               Focus
             </button>
-            \${focusedNodeId ? '<button class="sidebar-btn secondary" onclick="window.clearFocus()">Clear Focus</button>' : ''}
+            \${focusedNodeId ? '<button class="sidebar-btn secondary" data-action="clear-focus">Clear Focus</button>' : ''}
           </div>
         </div>
     \`;
@@ -2576,10 +3328,16 @@ function getScript(): string {
       html += \`
         <div class="sidebar-section">
           <h3>State Defined</h3>
-          \${comp.stateProvided.map(s => \`
-            <span class="tag tag-state">\${s.name}</span>
-            <span style="font-size:10px;color:var(--vscode-descriptionForeground)">(\${s.type})</span>
-          \`).join('')}
+          \${comp.stateProvided.map(s => {
+            const meta = [getStateTypeLabel(s.type)];
+            if (s.library) meta.push(s.library);
+            else if (s.storeName) meta.push(s.storeName);
+            else if (s.hookName) meta.push(s.hookName);
+            return \`<div class="state-entry">
+              <span class="tag tag-state" style="background: \${getStateTypeColor(s.type)};" title="\${esc(s.type)}">\${esc(s.name)}</span>
+              <span class="state-entry-meta">(\${esc(meta.join(' · '))})</span>
+            </div>\`;
+          }).join('')}
         </div>
       \`;
     }
@@ -2590,7 +3348,7 @@ function getScript(): string {
           <h3>Provides Context</h3>
           \${comp.contextProviders.map(c => {
             const color = getContextColor(c.contextName);
-            return \`<span class="tag" style="background: \${color.fill}; color: white;">\${c.contextName}</span>\`;
+            return \`<span class="tag" style="background: \${color.fill}; color: white;">\${esc(c.contextName)}</span>\`;
           }).join('')}
         </div>
       \`;
@@ -2602,7 +3360,7 @@ function getScript(): string {
           <h3>Consumes Context</h3>
           \${comp.contextConsumers.map(c => {
             const color = getContextColor(c);
-            return \`<span class="tag" style="background: \${color.fill}; color: white;">\${c}</span>\`;
+            return \`<span class="tag" style="background: \${color.fill}; color: white;">\${esc(c)}</span>\`;
           }).join('')}
         </div>
       \`;
@@ -2612,7 +3370,25 @@ function getScript(): string {
       html += \`
         <div class="sidebar-section">
           <h3>Props</h3>
-          \${comp.props.map(p => \`<span class="tag tag-props">\${p.name}</span>\`).join('')}
+          \${comp.props.map(p => \`<span class="tag tag-props">\${esc(p.name)}</span>\`).join('')}
+        </div>
+      \`;
+    }
+
+    // Insights reported for this component
+    const insights = graphData.insights.filter(i => i && i.componentId === comp.id);
+    if (insights.length > 0) {
+      const severityOrder = { error: 0, warning: 1, info: 2, hint: 3 };
+      insights.sort((x, y) => (severityOrder[x.severity] ?? 9) - (severityOrder[y.severity] ?? 9));
+      html += \`
+        <div class="sidebar-section">
+          <h3>Insights (\${insights.length})</h3>
+          \${insights.map(i => \`
+            <div class="insight-item insight-\${esc(i.severity)}" data-path="\${esc(i.filePath || comp.filePath)}" data-line="\${esc(i.line || comp.line)}" title="\${esc(fileLabel(i.filePath || comp.filePath, i.line))}">
+              <div class="insight-code">\${esc(i.severity)} · \${esc(i.code)}</div>
+              <div>\${esc(i.message)}</div>
+            </div>
+          \`).join('')}
         </div>
       \`;
     }
@@ -2664,6 +3440,45 @@ function getScript(): string {
       \`;
     }
 
+    // Render hierarchy (explicit JSX relations when available, else inferred from props edges)
+    if (hasRendersData) {
+      const renderedBy = [];
+      const renders = [];
+      const seenParents = new Set();
+      const seenChildren = new Set();
+      graphData.renders.forEach(r => {
+        if (!r) return;
+        if (r.to === comp.id && r.from !== comp.id && !seenParents.has(r.from)) {
+          seenParents.add(r.from);
+          renderedBy.push(r);
+        }
+        if (r.from === comp.id && r.to !== comp.id && !seenChildren.has(r.to)) {
+          seenChildren.add(r.to);
+          renders.push(r);
+        }
+      });
+      const renderRow = (otherId, r) => \`<div class="detail-row">
+          <span class="detail-label\${componentIdSet.has(otherId) ? ' nav-link' : ''}" data-component-id="\${esc(otherId)}">\${esc(getComponentName(otherId))}</span>
+          <span class="line-link" data-path="\${esc(r.filePath)}" data-line="\${esc(r.line)}" title="\${esc(r.filePath)}">\${esc(fileLabel(r.filePath, r.line))}</span>
+        </div>\`;
+      if (renderedBy.length > 0) {
+        html += \`
+          <div class="sidebar-section">
+            <h3>Rendered By</h3>
+            \${renderedBy.map(r => renderRow(r.from, r)).join('')}
+          </div>
+        \`;
+      }
+      if (renders.length > 0) {
+        html += \`
+          <div class="sidebar-section">
+            <h3>Renders</h3>
+            \${renders.map(r => renderRow(r.to, r)).join('')}
+          </div>
+        \`;
+      }
+    }
+
     const incoming = graphData.edges.filter(e => e.to === comp.id);
     const outgoing = graphData.edges.filter(e => e.from === comp.id);
 
@@ -2672,10 +3487,9 @@ function getScript(): string {
         <div class="sidebar-section">
           <h3>Receives From</h3>
           \${incoming.map(e => {
-            const from = graphData.components[e.from];
             return \`<div class="detail-row">
-              <span class="detail-label">\${from?.name || 'Unknown'}</span>
-              <span class="detail-value">\${e.mechanism}\${e.propName ? ' (' + e.propName + ')' : ''}</span>
+              <span class="detail-label\${componentIdSet.has(e.from) ? ' nav-link' : ''}" data-component-id="\${esc(e.from)}">\${esc(getComponentName(e.from))}</span>
+              <span class="detail-value">\${esc(e.mechanism)}\${e.propName ? ' (' + esc(e.propName) + ')' : ''}</span>
             </div>\`;
           }).join('')}
         </div>
@@ -2687,10 +3501,9 @@ function getScript(): string {
         <div class="sidebar-section">
           <h3>Passes To</h3>
           \${outgoing.map(e => {
-            const to = graphData.components[e.to];
             return \`<div class="detail-row">
-              <span class="detail-label">\${to?.name || 'Unknown'}</span>
-              <span class="detail-value">\${e.mechanism}\${e.propName ? ' (' + e.propName + ')' : ''}</span>
+              <span class="detail-label\${componentIdSet.has(e.to) ? ' nav-link' : ''}" data-component-id="\${esc(e.to)}">\${esc(getComponentName(e.to))}</span>
+              <span class="detail-value">\${esc(e.mechanism)}\${e.propName ? ' (' + esc(e.propName) + ')' : ''}</span>
             </div>\`;
           }).join('')}
         </div>
@@ -2700,18 +3513,39 @@ function getScript(): string {
     html += '</div>';
     sidebar.innerHTML = html;
 
-    // Add click handlers for file links
-    sidebar.querySelectorAll('.file-link').forEach(link => {
+    // Click handlers for anything that opens a file location
+    sidebar.querySelectorAll('.file-link, .line-link, .insight-item').forEach(link => {
       link.addEventListener('click', () => {
         const filePath = link.getAttribute('data-path');
         const line = parseInt(link.getAttribute('data-line'), 10);
+        if (!filePath) return;
         vscode.postMessage({
           command: 'openFile',
           filePath,
-          line
+          line: isNaN(line) ? undefined : line
         });
       });
     });
+
+    // Navigate to related components
+    sidebar.querySelectorAll('.nav-link[data-component-id]').forEach(link => {
+      link.addEventListener('click', () => {
+        const targetId = link.getAttribute('data-component-id');
+        if (targetId) enqueueTask(() => handleFocusNode(targetId));
+      });
+    });
+
+    const focusBtn = sidebar.querySelector('[data-action="focus"]');
+    if (focusBtn) {
+      focusBtn.addEventListener('click', () => {
+        const node = findCyNodeForComponent(comp.id);
+        if (node) window.focusOnNode(node.id());
+      });
+    }
+    const clearFocusBtn = sidebar.querySelector('[data-action="clear-focus"]');
+    if (clearFocusBtn) {
+      clearFocusBtn.addEventListener('click', () => window.clearFocus());
+    }
   }
 
   function updateStats() {
@@ -2757,10 +3591,18 @@ function getScript(): string {
       }
     }
 
+    // Summary may be missing or partial - fall back to counts derived from the graph
+    const summary = summaryData && typeof summaryData === 'object' ? summaryData : {};
+    const totalComponents = Number(summary.components?.totalComponents ?? Object.keys(graphData.components).length) || 0;
+    const totalStateNodes = Number(summary.state?.totalStateNodes ?? Object.keys(graphData.stateNodes || {}).length) || 0;
+    const totalEdges = Number(summary.flow?.totalEdges ?? graphData.edges.length) || 0;
+    const drillingComponents = Number(summary.components?.drillingComponents ?? 0) || 0;
+    const passthroughComponents = Number(summary.components?.passthroughComponents ?? 0) || 0;
+
     statsEl.innerHTML = \`
-      <span>\${summaryData.components.totalComponents} components</span>
-      <span>\${summaryData.state.totalStateNodes} state</span>
-      <span>\${summaryData.flow.totalEdges} edges</span>
+      <span>\${totalComponents} components</span>
+      <span>\${totalStateNodes} state</span>
+      <span>\${totalEdges} edges</span>
       \${drillingBadge}
       \${passthroughBadge}
       \${bundleBadge}
@@ -2771,9 +3613,9 @@ function getScript(): string {
     // Update compact summary for the toggle button
     if (statsSummary) {
       const issues = [];
-      if (summaryData.components.drillingComponents > 0) issues.push(\`\${summaryData.components.drillingComponents} drilling\`);
-      if (summaryData.components.passthroughComponents > 0) issues.push(\`\${summaryData.components.passthroughComponents} passthrough\`);
-      statsSummary.textContent = \`\${summaryData.components.totalComponents} components\` + (issues.length ? \` · \${issues.join(', ')}\` : '');
+      if (drillingComponents > 0) issues.push(\`\${drillingComponents} drilling\`);
+      if (passthroughComponents > 0) issues.push(\`\${passthroughComponents} passthrough\`);
+      statsSummary.textContent = \`\${totalComponents} components\` + (issues.length ? \` · \${issues.join(', ')}\` : '');
     }
   }
 
@@ -2804,7 +3646,7 @@ function getScript(): string {
         contextLegendItems += \`
           <div class="legend-item">
             <div class="legend-color" style="background: \${color.fill}; border: 2px solid \${color.fill};"></div>
-            <span>\${contextName}</span>
+            <span>\${esc(contextName)}</span>
           </div>
         \`;
       });
@@ -2852,8 +3694,21 @@ function getScript(): string {
           <div class="legend-color" style="background: transparent; border: 2px dashed #8957e5;"></div>
           <span>Context</span>
         </div>
+        \${getStateTypeLegendHtml()}
       \`;
     }
+  }
+
+  // Legend entries for the state types present in the current graph
+  function getStateTypeLegendHtml() {
+    const types = getStateTypesInGraph();
+    if (types.length === 0) return '';
+    return '<div class="legend-separator"></div><span class="legend-heading">State</span>' + types.map(type => \`
+        <div class="legend-item" title="\${esc(type)}">
+          <div class="legend-color legend-dot" style="background: \${getStateTypeColor(type)}"></div>
+          <span>\${esc(getStateTypeLabel(type))}</span>
+        </div>
+      \`).join('');
   }
 })();
   `;

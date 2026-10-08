@@ -1,48 +1,36 @@
 import * as vscode from 'vscode';
-import { StateMapPanel } from './panels/StateMapPanel';
+import { AnalysisManager } from './analysis/AnalysisManager';
+import { DiagnosticsFeature } from './features/diagnostics';
+import { FixesFeature } from './features/fixes';
+import { CodeLensFeature } from './features/codelens';
+import { HoverFeature } from './features/hover';
+import { InspectorView, ImpactView } from './features/views';
+import { CommandsFeature } from './features/commands';
+import { StatusBarFeature } from './features/statusBar';
+import { registerLanguageModelTools } from './features/lmTools';
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('React State Map extension is now active');
+  const output = vscode.window.createOutputChannel('React State Map');
+  const manager = new AnalysisManager(context.extensionUri, output);
+  const impactView = new ImpactView();
 
-  // Register the open panel command
-  const openPanelCommand = vscode.commands.registerCommand(
-    'reactStateMap.openPanel',
-    () => {
-      StateMapPanel.createOrShow(context.extensionUri);
-    }
+  context.subscriptions.push(
+    output,
+    manager,
+    impactView,
+    new DiagnosticsFeature(manager),
+    new FixesFeature(manager),
+    new CodeLensFeature(manager),
+    new HoverFeature(manager),
+    new InspectorView(manager),
+    new CommandsFeature(context, manager, impactView),
+    new StatusBarFeature(manager),
+    ...registerLanguageModelTools(manager)
   );
 
-  // Register the refresh command
-  const refreshCommand = vscode.commands.registerCommand(
-    'reactStateMap.refresh',
-    () => {
-      if (StateMapPanel.currentPanel) {
-        StateMapPanel.currentPanel.refresh();
-      } else {
-        StateMapPanel.createOrShow(context.extensionUri);
-      }
-    }
-  );
-
-  context.subscriptions.push(openPanelCommand, refreshCommand);
-
-  // Watch for file saves if auto-refresh is enabled
-  const fileWatcher = vscode.workspace.onDidSaveTextDocument((document) => {
-    const config = vscode.workspace.getConfiguration('reactStateMap');
-    const autoRefresh = config.get<boolean>('autoRefresh', true);
-
-    if (autoRefresh && StateMapPanel.currentPanel) {
-      const fileName = document.fileName;
-      if (fileName.endsWith('.tsx') || fileName.endsWith('.jsx') ||
-          fileName.endsWith('.ts') || fileName.endsWith('.js')) {
-        StateMapPanel.currentPanel.refresh();
-      }
-    }
-  });
-
-  context.subscriptions.push(fileWatcher);
+  manager.start();
 }
 
 export function deactivate() {
-  // Clean up
+  // Disposables registered on the context clean everything up
 }

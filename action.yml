@@ -1,0 +1,51 @@
+name: React State Map
+description: Check React state flow in pull requests — prop drilling, Server/Client Component mistakes and more, reported as inline annotations.
+author: Olaf Glad
+branding:
+  icon: git-branch
+  color: blue
+
+inputs:
+  path:
+    description: Directory to analyze, relative to the repository root.
+    required: false
+    default: '.'
+  fail-on:
+    description: Fail the step when a reported issue has this severity or higher (error, warning, info or none).
+    required: false
+    default: error
+  threshold:
+    description: Number of components a value must pass through before it counts as prop drilling.
+    required: false
+    default: '3'
+  base:
+    description: >-
+      Git ref or sha to compare against; only issues that are new since this ref are reported.
+      Defaults to the pull request base commit; empty (for example on push) runs a full check.
+    required: false
+    default: ${{ github.event.pull_request.base.sha }}
+  version:
+    description: Version of @react-state-map/cli to run (npm version or dist-tag).
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Run React State Map
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      # Inputs are passed through the environment (never interpolated into the script) to prevent script injection.
+      env:
+        RSM_PATH: ${{ inputs.path }}
+        RSM_FAIL_ON: ${{ inputs.fail-on }}
+        RSM_THRESHOLD: ${{ inputs.threshold }}
+        RSM_BASE: ${{ inputs.base }}
+        RSM_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        args=(check "$RSM_PATH" --format github --fail-on "$RSM_FAIL_ON" --threshold "$RSM_THRESHOLD")
+        if [ -n "$RSM_BASE" ]; then
+          args+=(--base "$RSM_BASE")
+        fi
+        npx --yes "@react-state-map/cli@${RSM_VERSION}" "${args[@]}"

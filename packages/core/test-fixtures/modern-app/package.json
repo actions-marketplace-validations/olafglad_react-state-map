@@ -1,0 +1,10 @@
+{
+  "name": "modern-app-fixture",
+  "private": true,
+  "dependencies": {
+    "next": "15.0.0",
+    "react": "19.0.0",
+    "@tanstack/react-query": "5.0.0",
+    "jotai": "2.0.0"
+  }
+}
