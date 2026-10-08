@@ -2,7 +2,7 @@
   "name": "react-state-map-vscode",
   "displayName": "React State Map",
   "description": "See where every prop really comes from — right in your editor. Prop origins on hover, impact analysis, prop-drilling quick fixes that lift state into context, Next.js server/client checks, an interactive state graph, and tools for Copilot & AI agents.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "OlafGlad",
   "license": "MIT",
   "icon": "images/icon.png",

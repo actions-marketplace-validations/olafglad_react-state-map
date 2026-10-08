@@ -223,9 +223,10 @@ test('incremental updates re-link the graph', () => {
   assert.equal([...parser.parse().graph.components.values()].some(c => c.name === 'E'), false);
 });
 
-test('unused props are reported; DOM forwarding counts as usage', () => {
+test('unused props are reported; DOM forwarding and rendering a component prop count as usage', () => {
   const dir = tempProject({
     'Btn.tsx': `export function Btn({ label, onClick, unused }: { label: string; onClick(): void; unused?: string }) {\n  return <button onClick={onClick}>{label}</button>;\n}`,
+    'Title.tsx': `import type { ComponentType } from 'react';\nexport function Title({ Glyph, Icon }: { Glyph: ComponentType; Icon: ComponentType }) {\n  return <span><Glyph size={14} /><Icon></Icon></span>;\n}`,
   });
   const { graph } = analyze(dir);
   const unused = graph.insights.filter(i => i.code === 'UNUSED_PROP').map(i => i.propName);

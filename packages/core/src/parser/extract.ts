@@ -717,7 +717,8 @@ function isReferenceOccurrence(id: Node): boolean {
   if (Node.isFunctionDeclaration(parent) || Node.isClassDeclaration(parent)) return false;
   if (Node.isTypeReference(parent) || Node.isQualifiedName(parent)) return false;
   if (Node.isImportSpecifier(parent) || Node.isExportSpecifier(parent)) return false;
-  if (Node.isJsxOpeningElement(parent) || Node.isJsxSelfClosingElement(parent) || Node.isJsxClosingElement(parent)) return false;
+  // <Glyph /> where Glyph is a prop: rendering it is a use (count the opening tag only)
+  if (Node.isJsxClosingElement(parent)) return false;
   return true;
 }
 

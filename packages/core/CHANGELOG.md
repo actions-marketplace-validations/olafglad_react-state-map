@@ -2,6 +2,11 @@
 
 All notable changes to @react-state-map/core will be documented in this file.
 
+## [0.3.1] - 2026-10-08
+
+### Fixed
+- A component passed as a prop and rendered as JSX (`<Glyph size={14} />`) is no longer reported as an unused prop.
+
 ## [0.3.0] - 2026-10-08
 
 A rewrite of the analyzer around per-file facts and an import-aware linker, plus a query API, diagnostics and code-fix planners.

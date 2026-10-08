@@ -2,6 +2,11 @@
 
 All notable changes to React State Map will be documented in this file.
 
+## [0.3.1] - 2026-10-08
+
+### Fixed
+- A component passed as a prop and rendered as JSX (`<Glyph size={14} />`) is no longer reported as an unused prop.
+
 ## [0.3.0] - 2026-10-08
 
 React State Map moves from "a graph you open sometimes" to answers right where you work.
