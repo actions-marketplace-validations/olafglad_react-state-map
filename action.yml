@@ -1,5 +1,5 @@
 name: React State Map
-description: Check React state flow in pull requests — prop drilling, Server/Client Component mistakes and more, reported as inline annotations.
+description: Flags prop drilling and Next.js Server/Client Component mistakes in pull requests, as inline annotations.
 author: Olaf Glad
 branding:
   icon: git-branch
