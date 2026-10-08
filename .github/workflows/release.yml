@@ -1,0 +1,100 @@
+# Release: push a tag like v0.3.2 and this builds, tests and publishes everything.
+#
+#   npm      @react-state-map/core, @react-state-map/cli   trusted publishing (OIDC, no token) + provenance
+#   Open VSX OlafGlad.react-state-map-vscode               trusted publishing (OIDC, no token)
+#   VS Code  Marketplace                                    only if the VSCE_PAT secret exists (no OIDC support yet)
+#   GitHub   release with the .vsix attached
+#
+# One-time setup on npmjs.com (each package) and open-vsx.org: register this repo + "release.yml"
+# as a trusted publisher. Each step skips versions that are already published, so re-running is safe.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub release
+      id-token: write   # OIDC for npm + Open VSX trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4   # version comes from "packageManager" in package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24           # ships npm >= 11.5.1, required for trusted publishing
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Check that the tag matches every package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for pkg in core cli vscode-extension; do
+            version=$(node -p "require('./packages/$pkg/package.json').version")
+            if [ "$version" != "$tag" ]; then
+              echo "::error::packages/$pkg is $version but the tag is v$tag"
+              exit 1
+            fi
+          done
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: pnpm --filter @react-state-map/core test
+
+      - name: Publish to npm (core first, then cli)
+        run: |
+          npm --version
+          mkdir -p dist-npm
+          for pkg in core cli; do
+            name=$(node -p "require('./packages/$pkg/package.json').name")
+            version=$(node -p "require('./packages/$pkg/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm, skipping"
+              continue
+            fi
+            # pnpm pack turns workspace:* into real versions; npm publish handles OIDC + provenance
+            (cd "packages/$pkg" && pnpm pack --pack-destination "$GITHUB_WORKSPACE/dist-npm" >/dev/null)
+            tarball="dist-npm/$(echo "${name#@}" | tr '/' '-')-$version.tgz"
+            npm publish "$tarball" --access public
+          done
+
+      - name: Package the VS Code extension
+        id: vsix
+        working-directory: packages/vscode-extension
+        run: |
+          npx vsce package --no-dependencies
+          echo "path=$PWD/$(ls *.vsix | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Open VSX
+        run: npx --yes ovsx@1.2.0 publish -i "${{ steps.vsix.outputs.path }}" --trusted-publishing --skip-duplicate
+
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::notice::No VSCE_PAT secret — upload the .vsix from the GitHub release at marketplace.visualstudio.com/manage"
+            exit 0
+          fi
+          cd packages/vscode-extension && npx vsce publish --packagePath "${{ steps.vsix.outputs.path }}" --skip-duplicate
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${{ steps.vsix.outputs.path }}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${{ steps.vsix.outputs.path }}" --title "$GITHUB_REF_NAME" --generate-notes
+          fi

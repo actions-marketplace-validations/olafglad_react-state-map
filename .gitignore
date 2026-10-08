@@ -10,3 +10,4 @@ state-map.html
 INTEGRATION_PLAN.md
 DEVELOPMENTPLAN.md
 .vscode-test/
+dist-npm/

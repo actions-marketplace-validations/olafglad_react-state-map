@@ -12,7 +12,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/olafglad/react-state-map"
+    "url": "git+https://github.com/olafglad/react-state-map.git",
+    "directory": "packages/vscode-extension"
   },
   "homepage": "https://github.com/olafglad/react-state-map#readme",
   "bugs": {
