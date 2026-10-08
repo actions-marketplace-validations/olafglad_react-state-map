@@ -2,6 +2,12 @@
 
 All notable changes to @react-state-map/cli will be documented in this file.
 
+## [0.3.2] - 2026-10-08
+
+### Changed
+- Published from GitHub Actions with npm trusted publishing, so the package now carries a provenance attestation linking it to the exact source commit.
+- The GitHub Action is listed on the GitHub Marketplace (shorter `action.yml` description).
+
 ## [0.3.1] - 2026-10-08
 
 ### Fixed

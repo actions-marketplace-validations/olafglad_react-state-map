@@ -1,6 +1,6 @@
 {
   "name": "@react-state-map/cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Know where every prop comes from — MCP server for Claude Code, Cursor & Copilot, a CI check with GitHub annotations, one-command prop-drilling fixes, and an interactive React state graph.",
   "type": "module",
   "license": "MIT",

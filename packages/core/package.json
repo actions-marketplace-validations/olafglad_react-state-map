@@ -1,6 +1,6 @@
 {
   "name": "@react-state-map/core",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Static analysis engine for React: knows where every prop comes from. Import-aware component graph, prop tracing, impact analysis, prop-drilling and Next.js Server Component diagnostics, and safe lift-to-context refactors.",
   "license": "MIT",
   "author": "Olaf Glad",

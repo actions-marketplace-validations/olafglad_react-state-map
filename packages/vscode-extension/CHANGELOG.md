@@ -2,6 +2,11 @@
 
 All notable changes to React State Map will be documented in this file.
 
+## [0.3.2] - 2026-10-08
+
+### Changed
+- Releases are now built and published automatically from GitHub Actions (Open VSX via trusted publishing); the `.vsix` is attached to each GitHub release.
+
 ## [0.3.1] - 2026-10-08
 
 ### Fixed
