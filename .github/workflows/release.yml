@@ -64,7 +64,7 @@ jobs:
             fi
             # pnpm pack turns workspace:* into real versions; npm publish handles OIDC + provenance
             (cd "packages/$pkg" && pnpm pack --pack-destination "$GITHUB_WORKSPACE/dist-npm" >/dev/null)
-            tarball="dist-npm/$(echo "${name#@}" | tr '/' '-')-$version.tgz"
+            tarball="./dist-npm/$(echo "${name#@}" | tr '/' '-')-$version.tgz"
             npm publish "$tarball" --access public
           done
 
